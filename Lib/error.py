@@ -8,7 +8,7 @@ class UnderConstruction(Exception):
 class UnexpectedError(Exception):
     pass
 
-class CollisionWarning(UserWarning):
+class CollisionDetected(UserWarning):
     pass
 
 class DuplicationWarning(UserWarning):
