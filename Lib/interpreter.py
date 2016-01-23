@@ -3,7 +3,7 @@
 Separate every argument with space and strictly obey the
 grammar or potential data loss could take place.
 Accepted keywords are:
-create, plot, set, start, print, list, alias, delete, p.
+create, plot, set, start, print, list, alias, delete, help ,p.
 For help of specific command refer to themselves.
 
 """
@@ -62,6 +62,7 @@ class Interpreter(ic):
             return self.__alias(self.gen)
         elif current in {'delete', 'd', 'del'}:
             return self.__delete(self.gen)
+        elif current in {'help','h'}:
         warnings.warn('Unknown keyword {!s}'.format(current),
                       SyntaxWarning, -1)
         return ''
