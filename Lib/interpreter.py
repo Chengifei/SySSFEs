@@ -25,9 +25,9 @@ class Interpreter(ic):
 
     def __init__(self):
         ic.__init__(self)
-        self.assigned = set()
+        self.assigned = {}
         self.params = set()
-        ic.push(self, 'import mechanics, sim')
+        ic.push(self, 'import mechanics, sim;from alg import vector')
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -89,7 +89,7 @@ class Interpreter(ic):
         if Type in self.moduledict: A = '{name}={module}.{type}({arg})'
         else:
             raise SyntaxError('Unknown Object {!s}'.format(Type))
-        self.assigned.add(name)
+        self.assigned[name]=Type
         Arg = ''
         for arg in line:
             Arg += arg + ','
@@ -124,15 +124,22 @@ class Interpreter(ic):
         start simulation, one at a time
 
         '''
-        return '{}.start()'.format(next(line))
+        return '{}.start({})'.format(next(line),next(line))
 
     def _print(self, line):
-        '''print name attribname
+        '''print name [attribname]
 
         print attribute or other data
 
         '''
-        return 'print({})'.format(next(line))
+        name=next(line)
+        try:
+            attr=next(line)
+        except StopIteration:
+            attr=None
+        if attr:
+            return 'print({}.{})'.format(name,attr)
+        return 'print({})'.format(name)
 
     def _list(self, line):
         '''list [objectname]
@@ -140,7 +147,7 @@ class Interpreter(ic):
         list all objects in engine or list attributes of object
 
         '''
-        print([(i, type(i)) for i in self.assigned])
+        print([(i, self.assigned[i]) for i in self.assigned])
         return ''
 
     def _alias(self, line):
