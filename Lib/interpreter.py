@@ -14,7 +14,7 @@ from code import InteractiveConsole
 from error import *
 import warnings
 
-sys.ps1 = 'Phyco > '
+sys.ps1 = 'Phyco >'
 ic = InteractiveConsole
 
 
@@ -32,7 +32,10 @@ class Interpreter(ic):
     def push(self, lines):
         self.pool = lines.split(';')
         for line in self.pool:
-            A = self.__lexer(line)
+            try:
+                A = self.__lexer(line)
+            except:
+                raise SyntaxWarning
             ic.push(self, A)
 
     def __lexer(self, line):
@@ -43,31 +46,32 @@ class Interpreter(ic):
 
         """
         self.gen = (i for i in line.split())
-        current = self.gen.__next__()
+        current = next(self.gen)
         if current == 'p':
             return ' '.join(self.gen)
         elif current in {'create', 'c'}:
-            return self.__create(self.gen)
+            return self._create(self.gen)
         elif current in {'plot', 'p'}:
-            self.__plot(self.gen)
+            self._plot(self.gen)
         elif current in {'set', 's'}:
-            return self.__set(self.gen)
+            return self._set(self.gen)
         elif current == 'start':
-            return self.__start(self.gen)
+            return self._start(self.gen)
         elif current == 'print':
-            return self.__print(self.gen)
+            return self._print(self.gen)
         elif current == 'list':
-            return self.__list(self.gen)
+            return self._list(self.gen)
         elif current == 'alias':
-            return self.__alias(self.gen)
+            return self._alias(self.gen)
         elif current in {'delete', 'd', 'del'}:
-            return self.__delete(self.gen)
+            return self._delete(self.gen)
         elif current in {'help','h'}:
+            return self._help(self.gen)
         warnings.warn('Unknown keyword {!s}'.format(current),
                       SyntaxWarning, -1)
         return ''
 
-    def __create(self, line):
+    def _create(self, line):
         """create type name [attribname attrib [...]]
 
         All the commands input after names will be directly
@@ -93,7 +97,7 @@ class Interpreter(ic):
         return A.format(name=name, type=Type,
                         module=self.moduledict[Type], arg=Arg)
 
-    def __plot(self, line):
+    def _plot(self, line):
         '''plot x y sizetuple
 
         plot data
@@ -102,8 +106,8 @@ class Interpreter(ic):
         # import matplotlib
         raise UnderConstruction
 
-    def __set(self, line):
-        """set name attribution [...]
+    def _set(self, line):
+        """set name attribute [...]
 
         set attribution of an object
 
@@ -114,7 +118,7 @@ class Interpreter(ic):
             pyline += name + '.{attr}={value};'.format(attr=i, value=next(line))
         return pyline
 
-    def __start(self, line):
+    def _start(self, line):
         '''start name
 
         start simulation, one at a time
@@ -122,27 +126,27 @@ class Interpreter(ic):
         '''
         return '{}.start()'.format(next(line))
 
-    def __print(self, line):
-        '''get name attribname
+    def _print(self, line):
+        '''print name attribname
 
-        get attribution or other data
+        print attribute or other data
 
         '''
         return 'print({})'.format(next(line))
 
-    def __list(self, line):
+    def _list(self, line):
         '''list [objectname]
 
-        list all objects in engine or list attributions of object
+        list all objects in engine or list attributes of object
 
         '''
         print([(i, type(i)) for i in self.assigned])
         return ''
 
-    def __alias(self, line):
+    def _alias(self, line):
         return ''
 
-    def __delete(self, line):
+    def _delete(self, line):
         '''d [objectname1 [...]]
 
         delete objects
@@ -153,6 +157,10 @@ class Interpreter(ic):
             self.assigned.remove(i)
             A += i + ','
         return A
+
+    def _help(self,line):
+        exec('print(help(Interpreter._{}))'.format(next(line)))
+        return ''
 
 if __name__ == '__main__':
     try:
