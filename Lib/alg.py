@@ -54,7 +54,6 @@ class vector():
 	def angle(self, other):
 		return math.acos(self.dot(other) / abs(self) / abs(other))
 
-	@unitize
 	def unitize(self):
 		return self / abs(self)
 
