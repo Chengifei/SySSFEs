@@ -4,14 +4,14 @@ import error
 
 class vector():
 	"""define a vector in cartesian (rec) cylinder (cyl) or spherical (sph) mode.
-	
+
 	Use '*','+','-' to obtain a scalar product, sum and difference, respectively.
 	'dot' and 'cross' method is provided to get inner and outer product of vectors, respectively.
 	'trans' method is used for transform an vector from one to another type of coordinate system.
 	'angle' method can return the angle between vectors.
 	"""
 	def __init__(self, a = 0, b = 0, c = 0, mode = 'rec'):
-		
+
 		if mode == 'rec':
 			self.x = a
 			self.y = b
@@ -24,45 +24,49 @@ class vector():
 			self.x = a * math.sin(b) * math.cos(c)
 			self.y = a * math.sin(b) * math.sin(c)
 			self.z = a * math.cos(b)
-	
+
 	def __mul__(self, scalar):
 		return vector(scalar * self.x, scalar * self.y, scalar * self.z)
-	
+
 	def __truediv__(self, scalar):
 		return vector(self.x / scalar, self.y / scalar, self.z / scalar)
-		
+
 	def dot(self, other):
 		return self.x * other.x + self.y * other.y + self.z * other.z
-	
+
 	def cross(self, other):
 		m = matrix([['i', 'j', 'k'], self.list, other.list])
 		return m.det()
-	
+
 	def __add__(self, other):
 		return vector(self.x + other.x, self.y + other.y, self.z + other.z)
-	
+
 	def __sub__(self, other):
 		return vector(self.x - other.x, self.y - other.y, self.z - other.z)
-	
+
 	def __abs__(self):
 		return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
-	
+
 	def trans(self, coord = 'pol'):
 		if coord == 'pol':
 			raise error.UnderConstruction
-	
+
 	def angle(self, other):
-		math.acos(self.dot(other) / abs(self) / abs(other))
-	
+		return math.acos(self.dot(other) / abs(self) / abs(other))
+
+	@unitize
+	def unitize(self):
+		return self / abs(self)
+
 	def list(self):
 		return [self.x, self.y, self.z]
-	
+
 	def __str__(self):
 		return str(self.list())
-	
+
 	def __len__(self):
 		return 3
-	
+
 	def __getitem__(self, index):
 		if index == 0:
 			return self.x
@@ -70,8 +74,9 @@ class vector():
 			return self.y
 		return self.z
 
+
 class matrix():
-	
+
 	def __init__(self, data, immutable = False):
 		#=======================================================================
 		# define new matrix, data should be a nested list or tuple, with each l-
@@ -84,25 +89,25 @@ class matrix():
 			self.data = tuple(data)
 		else:
 			self.data = data
-		
+
 	def __getitem__(self, *arg):
 		if len(arg) == 1:
 			return self.data[arg[0]]
 		elif len(arg) == 2:
 			return self.data[arg[0]][arg[1]]
-	
+
 	def mul(self, n):
 		# scalar multiplication ------------------------------------------------
 		return matrix([[self[r][c] * n for c in range(self.col)] for r in range(self.row)])
-	
+
 	def __mul__(self):
 		# multiplication of matrices ---------------------------------------------
 		pass
-	
+
 	def __rowSep(self, ROW):
 		row = [self.data[n][ROW] for n in range(self.row)]
 		return row
-	
+
 	def det(self, operator = False):
 		# determinant of a matrix ------------------------------------------------
 		if self.isSquare:
@@ -129,19 +134,19 @@ class matrix():
 				raise error.MathError('Unexpected type of operation')
 		else:
 			raise error.MathError('Not a square matrix')
-		
+
 	def transpose(self):
 		return matrix([self.__rowSep(n) for n in range(self.row)])
-	
+
 	def __iter__(self):
 		for col in self.data:
 			yield col
-	
+
 	def __repr__(self):
 		A = self.transpose()
 		return '\n'.join([str(col).lstrip('[').rstrip(']') for col in A])
 
 class operator():
-	
+
 	def __init__(self):
 		pass
