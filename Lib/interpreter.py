@@ -35,7 +35,8 @@ class Interpreter(ic):
             try:
                 A = self.__lexer(line)
             except:
-                raise SyntaxWarning
+                sys.stderr.write('Wrong Syntax\n')
+                A = ''
             ic.push(self, A)
 
     def __lexer(self, line):
@@ -65,19 +66,18 @@ class Interpreter(ic):
             return self._alias(self.gen)
         elif current in {'delete', 'd', 'del'}:
             return self._delete(self.gen)
-        elif current in {'help','h'}:
+        elif current in {'help', 'h'}:
             return self._help(self.gen)
-        warnings.warn('Unknown keyword {!s}'.format(current),
-                      SyntaxWarning, -1)
+        sys.stderr.write('Wrong Syntax\n')
         return ''
 
     def _create(self, line):
         """create type name [attribname attrib [...]]
 
-        All the commands input after names will be directly
-        passed to __init__() of their classes. User should
-        strictly obey the grammar of __init__(). Refer to
-        specific help if needed.
+        All the commands input after name will be directly
+        passed to __init__() of their own classes. User should
+        strictly obey the grammar of their constructors. Refer
+        to specific help if needed.
 
         """
         Type = next(line)
@@ -86,16 +86,17 @@ class Interpreter(ic):
             warnings.warn('replacing the old "{}"'.format(name),
                         DuplicationWarning)
             # Should be improved to ask for permission.
-        if Type in self.moduledict: A = '{name}={module}.{type}({arg})'
+        if Type in self.moduledict:
+        	A = '{name}={module}.{type}({arg})'
         else:
-            raise SyntaxError('Unknown Object {!s}'.format(Type))
-        self.assigned[name]=Type
+            raise sys.stderr.write('Unknown Object {!s}'.format(Type))
+        self.assigned[name] = Type
         Arg = ''
         for arg in line:
             Arg += arg + ','
 
-        return A.format(name=name, type=Type,
-                        module=self.moduledict[Type], arg=Arg)
+        return A.format(name = name, type = Type,
+                        module = self.moduledict[Type], arg = Arg)
 
     def _plot(self, line):
         '''plot x y sizetuple
@@ -115,7 +116,7 @@ class Interpreter(ic):
         pyline = ''
         name = next(line) 
         for i in line:
-            pyline += name + '.{attr}={value};'.format(attr=i, value=next(line))
+            pyline += name + '.{attr}={value};'.format(attr = i, value = next(line))
         return pyline
 
     def _start(self, line):
@@ -124,7 +125,7 @@ class Interpreter(ic):
         start simulation, one at a time
 
         '''
-        return '{}.start({})'.format(next(line),next(line))
+        return '{}.start({})'.format(next(line), next(line))
 
     def _print(self, line):
         '''print name [attribname]
@@ -132,13 +133,13 @@ class Interpreter(ic):
         print attribute or other data
 
         '''
-        name=next(line)
+        name = next(line)
         try:
-            attr=next(line)
+            attr = next(line)
         except StopIteration:
-            attr=None
+            attr = None
         if attr:
-            return 'print({}.{})'.format(name,attr)
+            return 'print({}.{})'.format(name, attr)
         return 'print({})'.format(name)
 
     def _list(self, line):
@@ -165,7 +166,7 @@ class Interpreter(ic):
             A += i + ','
         return A
 
-    def _help(self,line):
+    def _help(self, line):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
 
