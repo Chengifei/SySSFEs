@@ -12,9 +12,9 @@ import json
 import sys
 from code import InteractiveConsole
 from error import *
-import warnings
 
 sys.ps1 = 'Phyco >'
+warn=sys.stderr.write
 ic = InteractiveConsole
 
 
@@ -83,17 +83,20 @@ class Interpreter(ic):
         Type = next(line)
         name = next(line)
         if name in self.assigned:
-            warnings.warn('replacing the old "{}"'.format(name),
+            warn('replacing the old "{}"'.format(name),
                         DuplicationWarning)
             # Should be improved to ask for permission.
         if Type in self.moduledict:
         	A = '{name}={module}.{type}({arg})'
         else:
-            raise sys.stderr.write('Unknown Object {!s}'.format(Type))
+            warn('Unknown Object {!s}'.format(Type))
         self.assigned[name] = Type
         Arg = ''
-        for arg in line:
-            Arg += arg + ','
+        try:
+            for arg in line:
+                Arg += arg + '='+next(line)
+        except StopIteration:
+            warn('Inconsistent!')
 
         return A.format(name = name, type = Type,
                         module = self.moduledict[Type], arg = Arg)

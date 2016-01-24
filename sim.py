@@ -1,6 +1,7 @@
 """Physics Simulator by Finite Difference Method (FDM)"""
 from itertools import combinations
 from error import UnderConstruction
+import sys
 import alg
 import mechanics
 
@@ -17,14 +18,12 @@ class event():
 class sim():
     """FDM solver"""
 
-    def __init__(self, *arg, field=None, step=10 ** -2, end=1, var=[]):
-        self.objs = arg
-        self.__comb = combinations(self.objs, 2)
+    def __init__(self, objs=None, field=None, step=10 ** -2, end=1, var=[]):
+        self.objs = objs
+        #self.__comb = combinations(self.objs, 2)
         self.field = field
         self.step = step
         self.constraints = {}
-        self.X = []
-        self.V = []
         __slots__ = ('objs', 'comb', 'field', 'step', 'end',
                      'constriants', 'cache', 'X', 'V')
 
@@ -38,15 +37,13 @@ class sim():
         i = int(end / dt)  # number of steps needed
         x = dict(zip(self.objs, [obj.pos for obj in self.objs]))
         v = dict(zip(self.objs, [obj.velocity for obj in self.objs]))
-        X = []
-        V = []
-        X.append(x.copy())
-        V.append(v.copy())
+        self.X = [x.copy()]
+        self.V = [v.copy()]
         # compute initial distance between each other
-        d = dict(zip(self.__comb, [abs(x[comb[0]] - x[comb[1]]) \
-                                   for comb in self.__comb]))
-        self.cache = (_cache(x), _cache(d))  # initialize cache
-        
+        d = dict(zip(combinations(self.objs, 2), [abs(x[comb[0]] - x[comb[1]]) \
+                                   for comb in combinations(self.objs, 2)]))
+        self.cache = (_cache([x]), _cache([d]))  # initialize cache
+
         for i in range(i):
             for Obj in self.objs:
                 pos = x[Obj]
@@ -61,34 +58,31 @@ class sim():
                 v[Obj] += a * dt
 
             # update distance, preparing for collision check
-            d = dict(zip(self.__comb, [abs(x[comb[0]] - x[comb[1]])\
-                                       for comb in self.__comb]))
+            d = dict(zip(combinations(self.objs, 2), [abs(x[comb[0]] - x[comb[1]])\
+                                       for comb in combinations(self.objs, 2)]))
             self.cache[0].append(x)  # push newly computed data to cache
             self.cache[1].append(d)
-            D = self.cache[1].diff()  # change of distance
-            self.__check(d, D, v, x)
+            self.__check(d, v, x)
 
-            X.append(x.copy())
-            V.append(v.copy())
-        self.X = X
-        self.V = V
-
-    def __check(self, d, D, v, x):
+    def __check(self, d, v, x):
         # check constraints
         # pass
         # check collision
-        for a in self.__comb:  # enumerate to find collision
-            # Fixed value 5*dt*v assumes v cannot change 10 times in an interval
+        D=self.cache[1].diff()
+        for a in combinations(self.objs, 2):  # enumerate to find collision
             o1, o2 = a[0], a[1]
+            print('checking')
             if d[a] < max(v[o1], v[o2]) * self.step and D[a] < 0:
                 # two bodies are at critical distance, check if they're coplannar
                 if self.__isCoplannar(x[o1], x[o2], v[o1], v[o2]):
                     # two trajectories are coplannar, check if they intersect
                     if self.__isIntersect(x[o1], x[o2], self.cache[0][o1], self.cache[0][o2]):
                         # collision detected
-                        mechanics.colSolver()
-                        self.collisiondetect(d, D, v, x)
-                        # WARNING: May encounter infinite loop, not checked yet
+                        v[o1],v[o2]=mechanics.colSolver([v[o1],v[o2]])
+                        self.collisiondetect(d, v, x)
+                        # WARNING: May encounter infinite loop, not proved yet
+        self.X.append(x.copy())
+        self.V.append(v.copy())
 
     def __isCoplannar(self, point1, point2, d1, d2):
         # could probably be included in alg.py
@@ -124,7 +118,7 @@ class sim():
         for i in X:
             for obj in self.objs:
                 i[obj] = i[obj].list()
-            i = str(i)
+            i = str(i)+'\n'
         return str(X)
 
 
@@ -146,9 +140,8 @@ class _cache():
         if you want to use this class in other ways, replace this.
         """
         self.__len = l  # NOTE: It's not the length of iterable!
-        a = len(iterable)
-        self.__list = [None] * (l - a) + list(iterable)
-        self.__keys = iterable.keys()
+        self.__list = [None] * (l - self.__len) + list(iterable)
+        self.__keys = iterable[-1].keys()
 
     def append(self, object):
         self.__list.append(object)
