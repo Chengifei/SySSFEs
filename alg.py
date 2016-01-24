@@ -28,6 +28,9 @@ class vector():
 	def __mul__(self, scalar):
 		return vector(scalar * self.x, scalar * self.y, scalar * self.z)
 
+	def __rmul__(self, scalar):
+		return self * scalar
+
 	def __truediv__(self, scalar):
 		return vector(self.x / scalar, self.y / scalar, self.z / scalar)
 
@@ -35,8 +38,9 @@ class vector():
 		return self.x * other.x + self.y * other.y + self.z * other.z
 
 	def cross(self, other):
-		m = matrix([['i', 'j', 'k'], self.list, other.list])
-		return m.det()
+		m = matrix([['i', 'j', 'k'], self.list(), other.list()])
+		x, y, z = m.det(operator = True)
+		return vector(x, y, z)
 
 	def __add__(self, other):
 		return vector(self.x + other.x, self.y + other.y, self.z + other.z)
@@ -46,6 +50,10 @@ class vector():
 
 	def __abs__(self):
 		return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
+
+	def __ge__(self, other):
+		# only compares the magnitude
+		return abs(self) > abs(other)
 
 	def trans(self, coord = 'pol'):
 		if coord == 'pol':
@@ -79,7 +87,7 @@ class matrix():
 	def __init__(self, data, immutable = False):
 		#=======================================================================
 		# define new matrix, data should be a nested list or tuple, with each l-
-		# -ist or tuple represents a row vector by default.
+		# -ist or tuple represents a column vector by default.
 		#=======================================================================
 		self.col = len(data)
 		self.row = len(data[0])
@@ -91,15 +99,15 @@ class matrix():
 
 	def __getitem__(self, *arg):
 		if len(arg) == 1:
-			return self.data[arg[0]]
+			return self.__rowSep(arg[0])
 		elif len(arg) == 2:
-			return self.data[arg[0]][arg[1]]
+			return self.data[arg[0]][arg[1]]  # !
 
-	def mul(self, n):
+	def __mul__(self, n):
 		# scalar multiplication ------------------------------------------------
 		return matrix([[self[r][c] * n for c in range(self.col)] for r in range(self.row)])
 
-	def __mul__(self):
+	def mul(self):
 		# multiplication of matrices ---------------------------------------------
 		pass
 
@@ -113,9 +121,9 @@ class matrix():
 			if operator and self.row == 3:
 				temp = []
 				for i in range(3):
-					COL = [0, 1, 2]
-					COL.remove(i)
-					t = matrix([self.__rowSep(n)[1:] for n in COL])
+					ROW = [0, 1, 2]
+					ROW.remove(i)
+					t = matrix([self.__rowSep(n)[1:] for n in ROW])
 					temp.append(t)
 				return temp[0].det(), -temp[1].det(), temp[2].det()
 			if not operator:
@@ -124,9 +132,9 @@ class matrix():
 				else:
 					d = 0
 					for i in range(self.row):
-						COL = {i for i in range(self.row)}
-						COL.remove(i)
-						t = matrix([self.__rowSep(n)[1:] for n in COL])
+						ROW = {i for i in range(self.row)}
+						ROW.remove(i)
+						t = matrix([self.__rowSep(n)[1:] for n in ROW])
 						d += t.det()
 					return d
 			else:

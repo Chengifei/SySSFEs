@@ -4,7 +4,7 @@ import alg
 from error import UnderConstruction
 
 
-def colSolver(v = None, e = 1):
+def colSolver(m = None, v = None, e = 1):
         """Invoked when collision detected
 
         Defines an elastic collision on default.
@@ -20,8 +20,8 @@ def colSolver(v = None, e = 1):
         # deal with 1-D collision
         v1fm = m[1] / (m[0] + m[1]) * (vrel + vrelf)  # magnitude of vaf
         v2fm = (m[1] * vrel - m[0] * vrelf) / (m[0] + m[1])
-        v1f = vref + v1f * vrelu
-        v2f = vref + v2f * vrelu
+        v1f = vref + v1fm * vrelu
+        v2f = vref + v2fm * vrelu
         return v1f, v2f
 
 
