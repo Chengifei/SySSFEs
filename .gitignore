@@ -2,3 +2,5 @@
 /.pydevproject
 
 /count.json
+
+*.json
