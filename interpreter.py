@@ -14,7 +14,7 @@ from code import InteractiveConsole
 from error import *
 
 sys.ps1 = 'Phyco >'
-warn=sys.stderr.write
+warn = sys.stderr.write
 ic = InteractiveConsole
 
 
@@ -31,6 +31,7 @@ class Interpreter(ic):
 
     def push(self, lines):
         self.pool = lines.split(';')
+        self.pool = [_line for _line in self.pool if _line]
         for line in self.pool:
             try:
                 A = self.__lexer(line)
@@ -94,7 +95,7 @@ class Interpreter(ic):
         Arg = ''
         try:
             for arg in line:
-                Arg += arg + '='+next(line)
+                Arg += arg + '=' + next(line)
         except StopIteration:
             warn('Inconsistent!')
 
@@ -117,7 +118,7 @@ class Interpreter(ic):
 
         """
         pyline = ''
-        name = next(line) 
+        name = next(line)
         for i in line:
             pyline += name + '.{attr}={value};'.format(attr = i, value = next(line))
         return pyline

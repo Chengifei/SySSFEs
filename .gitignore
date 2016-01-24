@@ -1,3 +1,4 @@
 /.project
-/
-.pydevproject
+/.pydevproject
+
+/count.json

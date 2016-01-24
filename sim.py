@@ -8,7 +8,7 @@ import mechanics
 
 class event():
 
-    def __init__(self, mode='occurred', *arg):
+    def __init__(self, mode = 'occurred', *arg):
         if mode == 'occurred':
             pass
         elif mode == 'pass':
@@ -18,9 +18,9 @@ class event():
 class sim():
     """FDM solver"""
 
-    def __init__(self, objs=None, field=None, step=10 ** -2, end=1, var=[]):
+    def __init__(self, objs = None, field = None, step = 10 ** -2, end = 1, var = []):
         self.objs = objs
-        #self.__comb = combinations(self.objs, 2)
+        # self.__comb = combinations(self.objs, 2)
         self.field = field
         self.step = step
         self.constraints = {}
@@ -32,7 +32,7 @@ class sim():
         WARNING: Using dict to store all combinations of two objects,
         data loss would happen when too many objects encountered.
         """
-        
+
         dt = self.step
         i = int(end / dt)  # number of steps needed
         x = dict(zip(self.objs, [obj.pos for obj in self.objs]))
@@ -68,19 +68,16 @@ class sim():
         # check constraints
         # pass
         # check collision
-        D=self.cache[1].diff()
+        D = self.cache[1].diff()
         for a in combinations(self.objs, 2):  # enumerate to find collision
             o1, o2 = a[0], a[1]
-            print('checking')
-            if d[a] < max(v[o1], v[o2]) * self.step and D[a] < 0:
+            if d[a] < max(abs(v[o1]), abs(v[o2])) * self.step and D[a] < 0:
                 # two bodies are at critical distance, check if they're coplannar
                 if self.__isCoplannar(x[o1], x[o2], v[o1], v[o2]):
                     # two trajectories are coplannar, check if they intersect
-                    if self.__isIntersect(x[o1], x[o2], self.cache[0][o1], self.cache[0][o2]):
+                    if self.__isIntersect(x[o1], self.cache[0][o1], x[o2], self.cache[0][o2]):
                         # collision detected
-                        v[o1],v[o2]=mechanics.colSolver([v[o1],v[o2]])
-                        self.collisiondetect(d, v, x)
-                        # WARNING: May encounter infinite loop, not proved yet
+                        v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
         self.X.append(x.copy())
         self.V.append(v.copy())
 
@@ -101,24 +98,24 @@ class sim():
         return False
 
     def __isIntersect(self, p1, p2, p3, p4):
-        """Check if two segments intersects
-        
+        """Check if p1p2 and p3p4 intersects
+
         Iif two segments intersects
-        
+
         """
         AB = p1 - p2
         AC = p1 - p3
         AD = p1 - p4
-        if AB.cross(AC) * AB.cross(AD) <= 0:
+        if AB.cross(AC).dot(AB.cross(AD)) <= 0:
             return True
         return False
-    
+
     def __str__(self):
         X = self.X
         for i in X:
             for obj in self.objs:
                 i[obj] = i[obj].list()
-            i = str(i)+'\n'
+            i = str(i) + '\n'
         return str(X)
 
 
@@ -134,14 +131,14 @@ class _cache():
 
     """
 
-    def __init__(self, iterable, l=2):
+    def __init__(self, iterable, l = 2):
         """
         Though the usage of the class is not limited to dict,
         if you want to use this class in other ways, replace this.
         """
         self.__len = l  # NOTE: It's not the length of iterable!
-        self.__list = [None] * (l - self.__len) + list(iterable)
-        self.__keys = iterable[-1].keys()
+        self.__list = [None] * (self.__len - len(iterable)) + list(iterable)
+        self.__keys = iterable[0].keys()
 
     def append(self, object):
         self.__list.append(object)
@@ -152,12 +149,15 @@ class _cache():
             yield i
 
     def __getitem__(self, index):
-        pass
+        return self.__list[-1][index]
 
     def diff(self):
         """compare objects stored in cache
 
         Substract last two entry of cache. It won't
-        check if two entry are of the same length!
+        check if two elements are of the same length!
         """
         return {i:self.__list[-1][i] - self.__list[-2][i] for i in self.__keys}
+
+    def __str__(self):
+        return str(self.__list)
