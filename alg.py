@@ -1,4 +1,7 @@
-'''This is the math processing module of PhycoE. In normal cases, you shouldn't invoke this directly'''
+'''This is the float and symbolic math processing module of PhycoE.
+In normal cases, you shouldn't invoke this directly.
+
+'''
 import math
 import error
 
@@ -62,6 +65,7 @@ class vector():
 	def angle(self, other):
 		return math.acos(self.dot(other) / abs(self) / abs(other))
 
+	@unitize
 	def unitize(self):
 		return self / abs(self)
 
@@ -80,7 +84,6 @@ class vector():
 		elif index == 1:
 			return self.y
 		return self.z
-
 
 class matrix():
 
@@ -152,6 +155,18 @@ class matrix():
 	def __repr__(self):
 		A = self.transpose()
 		return '\n'.join([str(col).lstrip('[').rstrip(']') for col in A])
+
+class eqn():
+
+	def __init__(self, eqn, params = None):
+		self.eqn = eqn
+		self.params
+
+	def solve(self):
+		pass
+
+	def __str__(self):
+		return str(self.eqn)
 
 class operator():
 
