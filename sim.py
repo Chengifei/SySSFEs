@@ -2,7 +2,7 @@
 from itertools import combinations
 from error import UnderConstruction
 import sys
-import alg
+import alg, geom
 import mechanics
 
 
