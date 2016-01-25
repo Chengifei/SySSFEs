@@ -7,9 +7,7 @@ vectortype = type(vector())
 circletype = type(circle())
 
 class geom():
-
-    def plot(self):
-        pass
+    pass
 
 class line(geom):
 
@@ -58,6 +56,25 @@ class line(geom):
             N = self.dir.cross(arg.dir)  # normal vector
             return N.unitize().dot(self.p - arg.p)
         raise error.MathError
+
+    def __getitem__(self, x):
+        # underconstruction
+        return alg.vector()
+
+class segment(line):
+
+    def __init__(self, p1, p2):
+    # different with line, only accept two-point def
+        line.__init__(self, p1, p2)
+        self.endpoint1 = p1
+        self.endpoint2 = p2
+        self.vector = p2 - p1
+
+    def isintersect(self, other):
+        if self.vector.cross(other.endpoint1 - self.endpoint1)\
+                        .dot(other.endpoint2 - self.endpoint1):
+            return True
+        return False
 
 class polygon(geom):
 
