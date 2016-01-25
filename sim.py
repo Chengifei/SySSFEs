@@ -82,15 +82,7 @@ class sim():
         self.V.append(v.copy())
 
     def __isCoplannar(self, point1, point2, d1, d2):
-        # could probably be included in alg.py
-        """Check if two trajectories are coplannar
-
-        If two segments are coplannar then any segment
-        between two points on the lines are in their
-        plane and vice versa. It uses scalar triple
-        product to check if two segments are coplannar.
-
-        """
+        """Check if two trajectories are coplanar"""
         D = point1 - point2
         A = alg.matrix([d1, D, d2])
         if A.det() == 0:
