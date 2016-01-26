@@ -2,16 +2,12 @@ import alg
 from math import sqrt
 import error
 
-linetype = type(line(mode = 0))
-vectortype = type(vector())
-circletype = type(circle())
-
 class geom():
     pass
 
 class line(geom):
 
-    def __init__(self, mode = '2p', *args):
+    def __init__(self, *args, mode = '2p'):
         """generic line generator
 
         Different types of arguments can be used
@@ -33,12 +29,15 @@ class line(geom):
         NOTE: POINT SHOULD BE GIVEN IN VECTOR FORM!
 
         """
-        # only two-point form is implemented
+        # only limited forms are implemented
         if mode == '2p':
             p1, p2 = args
             self.dir = p2 - p1
             self.dir = self.dir.unitize()  # unitize direction vector
             self.p = p1  # choose a point on a line
+        if mode == 'ps':
+            self.p, self.dir = args
+            self.dir = self.dir.unitize()
         elif mode == 0:
             pass
         else:
@@ -100,7 +99,7 @@ class polygon(geom):
 
 class circle(geom):
 
-    def __init__(self, center = vector(), radius = None):
+    def __init__(self, center = alg.vector(), radius = None):
         self.center = center
         self.radius = radius
 
@@ -108,3 +107,7 @@ class funcCurve(geom):
 
     def __init__(self, x = None, y = None):
         pass
+
+linetype = type(line(mode = 0))
+vectortype = type(alg.vector())
+circletype = type(circle())

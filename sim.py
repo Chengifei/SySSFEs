@@ -71,10 +71,8 @@ class sim():
         D = self.cache[1].diff()
         for a in combinations(self.objs, 2):  # enumerate to find collision
             o1, o2 = a[0], a[1]
-            if d[a] < max(abs(v[o1]), abs(v[o2])) * self.step and D[a] < 0:
-                # two bodies are at critical distance, check if they're coplannar
-                if self.__isCoplannar(x[o1], x[o2], v[o1], v[o2]):
-                    # two trajectories are coplannar, check if they intersect
+            L1, L2 = geom.line(x[o1], v[o1], mode = 'ps'), geom.line(x[o2], v[o2], mode = 'ps')
+            if L1.distance(L2) <= min(abs(v[o1]), abs(v[o2])) * self.step:
                     if self.__isIntersect(x[o1], self.cache[0][o1], x[o2], self.cache[0][o2]):
                         # collision detected
                         v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
