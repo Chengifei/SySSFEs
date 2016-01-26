@@ -57,10 +57,6 @@ class vector():
     def __abs__(self):
         return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
-    def __ge__(self, other):
-        # only compares the magnitude
-        return abs(self) > abs(other)
-
     def trans(self, coord = 'pol'):
         if coord == 'pol':
             raise error.UnderConstruction
@@ -68,9 +64,11 @@ class vector():
     def angle(self, other):
         return math.acos(self.dot(other) / abs(self) / abs(other))
 
-    @unitize
     def unitize(self):
-        return self / abs(self)
+        try:
+            return self / abs(self)
+        except ZeroDivisionError:
+            return vector()
 
     def list(self):
         return [self.x, self.y, self.z]
