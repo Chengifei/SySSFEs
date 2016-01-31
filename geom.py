@@ -35,16 +35,20 @@ class line(geom):
             self.dir = p2 - p1
             self.dir = self.dir.unitize()  # unitize direction vector
             self.p = p1  # choose a point on a line
-        if mode == 'ps':
+        elif mode == 'ps':
             self.p, self.dir = args
             self.dir = self.dir.unitize()
-        elif mode == 0:
+        elif mode == 0:  # used to generate class-type
             pass
         else:
             raise error.UnderConstruction
 
     def distance(self, arg):
-        """calculate the distance between the line and an object"""
+        """calculate the distance between the line and an object
+
+        It also calculates distance between skew segments as lines!
+
+        """
         if isinstance(arg, vectortype):  # distance between point and line
             # the projection the link between the point and a point on the line.
             d = (self.p - arg) * self.dir
@@ -52,12 +56,19 @@ class line(geom):
             D = abs(self.p - arg)
             return sqrt(D * D - d * d)
         elif isinstance(arg, linetype):  # distance between (skew) lines
-            N = self.dir.cross(arg.dir)  # normal vector
-            return N.unitize().dot(self.p - arg.p)
-        raise error.MathError
+            N = self.dir.cross(arg.dir).unitize()  # common normal vector
+            return N.dot(self.p - arg.p)
+        raise TypeError
+
+    def isOnLine(self, point):
+        v1 = self.p - point
+        v2 = self.p + self.dir - point
+        if v1.isCollinear(v2):
+            return True
+        return False
 
     def __getitem__(self, x):
-        # underconstruction
+        raise error.UnderConstrution
         return alg.vector()
 
 class segment(line):
@@ -68,12 +79,24 @@ class segment(line):
         self.endpoint1 = p1
         self.endpoint2 = p2
         self.vector = p2 - p1
+        self.range = [p1.x, p2.x]
+        self.range.sort()
 
-    def isintersect(self, other):
+    def isIntersect(self, other):
         if self.vector.cross(other.endpoint1 - self.endpoint1)\
-                        .dot(other.endpoint2 - self.endpoint1):
+                        .dot(other.endpoint2 - self.endpoint1) <= 0:
+            if other and self:
+                return True
+            # Missing one case
+        return False
+
+    def isOnSeg(self, point):
+        if self.isOnLine(point) and self.range[1] > point.x > self.range[0]:
             return True
         return False
+
+    def __str__(self):
+        return str([self.endpoint1, self.endpoint2])
 
 class polygon(geom):
 
