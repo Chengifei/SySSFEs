@@ -70,6 +70,12 @@ class vector():
         except ZeroDivisionError:
             return vector()
 
+    def isCollinear(self, other):
+        if self.unitize() == other.unitize() or \
+           self.unitize() == -other.unitize():
+            return True
+        return False
+
     def list(self):
         return [self.x, self.y, self.z]
 
@@ -78,6 +84,9 @@ class vector():
 
     def __len__(self):
         return 3
+
+    def __bool__(self):
+        return abs(self)
 
     def __getitem__(self, index):
         if index == 0:

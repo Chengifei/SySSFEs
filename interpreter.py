@@ -36,7 +36,7 @@ class Interpreter(ic):
             try:
                 A = self.__lexer(line)
             except:
-                sys.stderr.write('Wrong Syntax\n')
+                sys.stderr.write('Wrong Syntax:{}\n'.format(str(A)))
                 A = ''
             ic.push(self, A)
 
@@ -69,7 +69,7 @@ class Interpreter(ic):
             return self._delete(self.gen)
         elif current in {'help', 'h'}:
             return self._help(self.gen)
-        sys.stderr.write('Wrong Syntax\n')
+        sys.stderr.write('Wrong Syntax:{}\n'.format(line))
         return ''
 
     def _create(self, line):
@@ -84,20 +84,19 @@ class Interpreter(ic):
         Type = next(line)
         name = next(line)
         if name in self.assigned:
-            warn('replacing the old "{}"'.format(name),
+            warn("You're about to replacing the old '{}'".format(name),
                         DuplicationWarning)
-            # Should be improved to ask for permission.
+            if not self._confirm():
+                return ''
         if Type in self.moduledict:
         	A = '{name}={module}.{type}({arg})'
         else:
             warn('Unknown Object {!s}'.format(Type))
         self.assigned[name] = Type
-        Arg = ''
         try:
-            for arg in line:
-                Arg += arg + '=' + next(line)
+            Arg = ','.join(line)
         except StopIteration:
-            warn('Inconsistent!')
+            pass
 
         return A.format(name = name, type = Type,
                         module = self.moduledict[Type], arg = Arg)
@@ -173,6 +172,17 @@ class Interpreter(ic):
     def _help(self, line):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
+
+    def __confirm(self):
+        IN = 0
+        while True:
+            IN = input('y/n ')
+            IN = IN.casefold()
+            if IN == 'y':
+                return True
+            elif IN == 'n':
+                return False
+            continue
 
 if __name__ == '__main__':
     try:

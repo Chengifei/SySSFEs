@@ -18,9 +18,11 @@ class event():
 class sim():
     """FDM solver"""
 
-    def __init__(self, objs = None, field = None, step = 10 ** -2, end = 1, var = []):
+    def __init__(self, objs, name = None, field = None, step = 10 ** -1, end = 1, var = []):
+        # name should be aligned to be compatible with objs
         self.objs = objs
         # self.__comb = combinations(self.objs, 2)
+        self.map = dict(zip(objs, name))
         self.field = field
         self.step = step
         self.constraints = {}
@@ -71,11 +73,12 @@ class sim():
         D = self.cache[1].diff()
         for a in combinations(self.objs, 2):  # enumerate to find collision
             o1, o2 = a[0], a[1]
-            L1, L2 = geom.line(x[o1], v[o1], mode = 'ps'), geom.line(x[o2], v[o2], mode = 'ps')
-            if L1.distance(L2) <= min(abs(v[o1]), abs(v[o2])) * self.step:
-                    if self.__isIntersect(x[o1], self.cache[0][o1], x[o2], self.cache[0][o2]):
-                        # collision detected
-                        v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
+            S1 = geom.segment(x[o1], x[o1] + v[o1] * self.step)
+            S2 = geom.segment(x[o2], x[o2] + v[o2] * self.step)
+            if S1.distance(S2) <= min(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
+                if S1.isIntersect(S2):
+                    # collision detected
+                    v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
         self.X.append(x.copy())
         self.V.append(v.copy())
 
@@ -104,8 +107,9 @@ class sim():
         X = self.X
         for i in X:
             for obj in self.objs:
-                i[obj] = i[obj].list()
-            i = str(i) + '\n'
+                i[self.map[obj]] = i[obj].list()
+                del i[obj]
+            # i = str(i) + '\n'
         return str(X)
 
 
