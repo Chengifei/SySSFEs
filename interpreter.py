@@ -23,6 +23,8 @@ class Interpreter(ic):
     moduledict = {'field':'mechanics', 'obj':'mechanics', 'constraint':'mechanics',
                   'sim':'sim', 'event':'sim'}
 
+    aliasdict = {}
+
     def __init__(self):
         ic.__init__(self)
         self.assigned = {}
@@ -155,6 +157,17 @@ class Interpreter(ic):
         return ''
 
     def _alias(self, line):
+        """alias originalname=abbreviation [...]
+
+        This is a feature handled in interpreter
+        level. It enables you to define your own
+        abbr. for both default and user-defined
+        names. You can remove alias by typing
+        like: alias A=A
+
+        """
+        for name in line:
+            self.aliasdict[name, next(name)]
         return ''
 
     def _delete(self, line):
