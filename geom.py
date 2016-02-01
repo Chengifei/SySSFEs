@@ -78,25 +78,37 @@ class segment(line):
         line.__init__(self, p1, p2)
         self.endpoint1 = p1
         self.endpoint2 = p2
-        self.vector = p2 - p1
         self.range = [p1.x, p2.x]
         self.range.sort()
+        self.vector = p2 - p1
+        self.isPoint = False
+        if p1 == p2:
+            self.isPoint = True
 
     def isIntersect(self, other):
         if self.vector.cross(other.endpoint1 - self.endpoint1)\
                         .dot(other.endpoint2 - self.endpoint1) <= 0:
-            if other and self:
+            if self.isPoint:
+                if other.isOnSeg(self):
+                    return True
+                return False
+            elif other.isPoint:
+                if self.isOnSeg(other):
+                    return True
+                return False
+            elif not (self.isPoint and other.isPoint):
                 return True
-            # Missing one case
         return False
 
     def isOnSeg(self, point):
-        if self.isOnLine(point) and self.range[1] > point.x > self.range[0]:
-            return True
-        return False
+        if not self.isPoint:
+            if self.isOnLine(point) and\
+               self.range[1] > point.x > self.range[0]:
+                return True
+            return False
 
     def __str__(self):
-        return str([self.endpoint1, self.endpoint2])
+        return str([str(self.endpoint1), str(self.endpoint2)])
 
 class polygon(geom):
 

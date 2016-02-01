@@ -42,9 +42,6 @@ class sim():
         self.X = [x.copy()]
         self.V = [v.copy()]
         # compute initial distance between each other
-        d = dict(zip(combinations(self.objs, 2), [abs(x[comb[0]] - x[comb[1]]) \
-                                   for comb in combinations(self.objs, 2)]))
-        self.cache = (_cache([x]), _cache([d]))  # initialize cache
 
         for i in range(i):
             for Obj in self.objs:
@@ -59,23 +56,17 @@ class sim():
                 # should have been improved
                 v[Obj] += a * dt
 
-            # update distance, preparing for collision check
-            d = dict(zip(combinations(self.objs, 2), [abs(x[comb[0]] - x[comb[1]])\
-                                       for comb in combinations(self.objs, 2)]))
-            self.cache[0].append(x)  # push newly computed data to cache
-            self.cache[1].append(d)
-            self.__check(d, v, x)
+            self.__check(v, x)
 
-    def __check(self, d, v, x):
+    def __check(self, v, x):
         # check constraints
         # pass
         # check collision
-        D = self.cache[1].diff()
         for a in combinations(self.objs, 2):  # enumerate to find collision
             o1, o2 = a[0], a[1]
             S1 = geom.segment(x[o1], x[o1] + v[o1] * self.step)
             S2 = geom.segment(x[o2], x[o2] + v[o2] * self.step)
-            if S1.distance(S2) <= min(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
+            if S1.distance(S2) <= max(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
                 if S1.isIntersect(S2):
                     # collision detected
                     v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
