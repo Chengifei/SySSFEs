@@ -30,6 +30,7 @@ class vector():
             self.x = a * math.sin(b) * math.cos(c)
             self.y = a * math.sin(b) * math.sin(c)
             self.z = a * math.cos(b)
+        __slots__ = ('x', 'y', 'z')
 
     def __mul__(self, scalar):
         return vector(scalar * self.x, scalar * self.y, scalar * self.z)
@@ -86,7 +87,10 @@ class vector():
         return 3
 
     def __bool__(self):
-        return abs(self)
+        return abs(self).__bool__()
+
+    def __ne__(self, other):
+        return self.list != other.list()
 
     def __getitem__(self, index):
         if index == 0:
