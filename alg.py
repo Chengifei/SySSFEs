@@ -55,6 +55,9 @@ class vector():
     def __sub__(self, other):
         return vector(self.x - other.x, self.y - other.y, self.z - other.z)
 
+    def __neg__(self):
+        return vector(-self.x, -self.y, -self.z)
+
     def __abs__(self):
         return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
@@ -88,6 +91,9 @@ class vector():
 
     def __bool__(self):
         return abs(self).__bool__()
+
+    def __eq__(self, other):
+        return self.list() == other.list()
 
     def __ne__(self, other):
         return self.list != other.list()

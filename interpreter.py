@@ -39,7 +39,7 @@ class Interpreter(ic):
             try:
                 A = self.__lexer(line)
             except:
-                sys.stderr.write('Wrong Syntax:{}\n'.format(str(A)))
+                warn('Wrong Syntax:{}\n'.format(str(A)))
                 A = ''
             ic.push(self, A)
 
@@ -73,7 +73,7 @@ class Interpreter(ic):
             return self._delete(self.gen)
         elif current in {'help', 'h'}:
             return self._help(self.gen)
-        sys.stderr.write('Wrong Syntax:{}\n'.format(line))
+        warn('Wrong Syntax:{}\n'.format(line))
         return ''
 
     def _create(self, line):
