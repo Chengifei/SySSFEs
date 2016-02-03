@@ -53,8 +53,10 @@ class field():
 
 class obj():
 
-    def __init__(self, mass = 1, initPos = alg.vector(), point = True, mode = 'rigid',
-                 charge = False, initv = alg.vector(), material = None):
+    objlist = {}
+
+    def __init__(self, name = None, mass = 1, pos = alg.vector(), point = True, mode = 'kinematic',
+                 charge = False, v = alg.vector(), material = None):
         self.mass = mass
         self.ability = False
         self.pos = initPos
@@ -81,6 +83,13 @@ class obj():
         return alg.vector()
         raise UnderConstruction
 
+    @classmethod
+    def __iter__():
+        return obj.objlist
 
 class constraint():
-    pass
+
+    constlist = {}
+
+    def __init__(self):
+        pass
