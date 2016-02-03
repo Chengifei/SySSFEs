@@ -81,31 +81,27 @@ class segment(line):
         self.range = [p1.x, p2.x]
         self.range.sort()
         self.vector = p2 - p1
-        self.isPoint = False
-        if p1 == p2:
-            self.isPoint = True
 
     def isIntersect(self, other):
         if self.vector.cross(other.endpoint1 - self.endpoint1)\
-                        .dot(other.endpoint2 - self.endpoint1) <= 0:
-            if self.isPoint:
-                if other.isOnSeg(self):
-                    return True
-                return False
-            elif other.isPoint:
-                if self.isOnSeg(other):
-                    return True
-                return False
-            elif not (self.isPoint and other.isPoint):
-                return True
+                        .dot(other.endpoint2 - self.endpoint1) < 0:
+            return True
+        elif not self:
+            return other.isOnSeg(self.endpoint1)
+        elif not other:
+            return self.isOnSeg(other.endpoint1)
         return False
 
     def isOnSeg(self, point):
-        if not self.isPoint:
+        if self:
             if self.isOnLine(point) and\
                self.range[1] > point.x > self.range[0]:
                 return True
             return False
+        return self.endpoint1 == point
+
+    def __bool__(self):
+        return self.vector.__bool__()
 
     def __str__(self):
         return str([str(self.endpoint1), str(self.endpoint2)])
@@ -117,8 +113,8 @@ class polygon(geom):
         self.n = len(self.vertex)
 
     def __sort(self):
-        C = alg.vector(sum(A[0] / self.n for A in self.vertex),
-                   sum(A[1] / self.n for A in self.vertex))
+        C = alg.vector(sum(A[0] for A in self.vertex) / self.n,
+                   sum(A[1] for A in self.vertex) / self.n)
         det = []
         for i in self.vertex:
             t = i - C

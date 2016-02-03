@@ -18,7 +18,7 @@ class event():
 class sim():
     """FDM solver"""
 
-    def __init__(self, objs, name = None, field = None, step = 10 ** -1, end = 1, var = []):
+    def __init__(self, objs, name = None, field = None, step = 10 ** -1, var = []):
         # name should be aligned to be compatible with objs
         self.objs = objs
         # self.__comb = combinations(self.objs, 2)
@@ -34,9 +34,9 @@ class sim():
         WARNING: Using dict to store all combinations of two objects,
         data loss would happen when too many objects encountered.
         """
-
         dt = self.step
         i = int(end / dt)  # number of steps needed
+        print (i)
         x = dict(zip(self.objs, [obj.pos for obj in self.objs]))
         v = dict(zip(self.objs, [obj.velocity for obj in self.objs]))
         self.X = [x.copy()]
@@ -100,7 +100,6 @@ class sim():
             for obj in self.objs:
                 i[self.map[obj]] = i[obj].list()
                 del i[obj]
-            # i = str(i) + '\n'
         return str(X)
 
 
