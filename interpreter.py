@@ -24,12 +24,13 @@ class Interpreter(ic):
                   'sim':'sim', 'event':'sim'}
 
     aliasdict = {}
+    aliasstatus = False
 
     def __init__(self):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
-        ic.push(self, 'import mechanics, sim;from alg import vector')
+        ic.push(self, 'import mechanics, sim; from alg import vector')
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -49,19 +50,20 @@ class Interpreter(ic):
         and process and send it to python.
 
         """
+
         self.gen = (i for i in line.split())
         current = next(self.gen)
         if current == 'p':
             return ' '.join(self.gen)
         elif current in {'create', 'c'}:
             return self._create(self.gen)
-        elif current in {'plot', 'p'}:
+        elif current in {'plot'}:
             self._plot(self.gen)
         elif current in {'set', 's'}:
             return self._set(self.gen)
         elif current == 'start':
             return self._start(self.gen)
-        elif current == 'print':
+        elif current in {'print', 'p'}:
             return self._print(self.gen)
         elif current == 'list':
             return self._list(self.gen)
@@ -166,8 +168,10 @@ class Interpreter(ic):
         like: alias A=A
 
         """
-        for name in line:
-            self.aliasdict[name, next(name)]
+        self.aliasstatus = True
+        for eqn in line:
+            eqn = eqn.split()
+            self.aliasdict[eqn, eqn(name)]
         return ''
 
     def _delete(self, line):
@@ -186,16 +190,10 @@ class Interpreter(ic):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
 
-    def __confirm(self):
-        IN = 0
-        while True:
-            IN = input('y/n ')
-            IN = IN.casefold()
-            if IN == 'y':
-                return True
-            elif IN == 'n':
-                return False
-            continue
+    def _translate(self):
+        # Commentz-Walter algorithm
+        pass
+
 
 if __name__ == '__main__':
     try:

@@ -5,14 +5,11 @@ class MathError(Exception):
 class UnderConstruction(Exception):
     pass
 
-class UnexpectedError(Exception):
-    pass
-
 class CollisionDetected(UserWarning):
     pass
 
 class DuplicationWarning(UserWarning):
     pass
 
-class InvalidKeyword(Exception):
+class InvalidKeyword(SyntaxError):
     pass
