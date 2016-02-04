@@ -93,7 +93,7 @@ class Interpreter(ic):
             if not self._confirm():
                 return ''
         if Type in self.moduledict:
-        	A = '{name}={module}.{type}({arg})'
+            A = '{name}={module}.{type}({arg})'
         else:
             warn('Unknown Object {!s}'.format(Type))
         self.assigned[name] = Type
@@ -171,7 +171,7 @@ class Interpreter(ic):
         self.aliasstatus = True
         for eqn in line:
             eqn = eqn.split()
-            self.aliasdict[eqn, eqn(name)]
+            self.aliasdict[eqn[0]] = eqn[1]
         return ''
 
     def _delete(self, line):
@@ -191,7 +191,7 @@ class Interpreter(ic):
         return ''
 
     def _translate(self):
-        # Commentz-Walter algorithm
+        # Aho-Corasick algorithm
         pass
 
 
