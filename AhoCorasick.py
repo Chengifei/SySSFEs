@@ -16,6 +16,7 @@ class ACtrie():
         # should probably move to be class variable
         self.allnodes = {}  # should probably be a set
         self.nodesbylevel = dict.fromkeys(range(self.maxlen + 1), set())
+        # self.root not included
         for i in self.set:
             self.add(i)
 
@@ -26,23 +27,31 @@ class ACtrie():
                 self.allnodes[(i, parent)] = ACnode(i, parent, str)
                 self.nodesbylevel[parent.level + 1].add(self.allnodes[(i, parent)])
                 parent = self.allnodes[(i, parent)]
-        ACnode(str[-1], parent, corrStr = str)
+        ACnode(str[-1], parent, corrStr=str)
         # Heretofore, all parent-child relation linked
         self.link()  # link all redirection in AC-trie
 
     def link(self):  # linker
-        for i in self.nodesbylevel.reversed():  # make redirection from bottom
+        for i in reversed(self.nodesbylevel):  # mark redirection from bottom
             for node in self.nodesbylevel[i]:
-                for j in range(self.maxlen + 1):  # from the 1st level (not zeroth)
-                    if node.char == j.char:
-                        node.link(j)
-                    break
+                for j in self.nodesbylevel:  # from the 1st level (not zeroth)
+                    for Node in self.nodesbylevel[j]:
+                        if node.char == Node.char:
+                            node.link(j)
+                        break
                 if not node.suffixset:
                     node.link(self.root)
+    
+    def go(self, str):
+        level = 0  # at root
+        for i in str:
+            if i in self.nodesbylevel[level + 1]:
+                level += 1
+        pass
 
 class ACnode():
 
-    def __init__(self, char, parent, corrStr = None):
+    def __init__(self, char, parent, corrStr=None):
         self.char = char
         self.parent = parent
         self.corrStr = corrStr  # corresponding string
@@ -55,7 +64,7 @@ class ACnode():
         if parent:
             parent.link(self)
 
-    def link(self, other, type = 0):  # 0 for child, 1 for suffix
+    def link(self, other, type=0):  # 0 for child, 1 for suffix
         if type == 0:
             self.childset.add(other)
         elif type == 1:
