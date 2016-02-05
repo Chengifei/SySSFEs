@@ -30,7 +30,8 @@ class Interpreter(ic):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
-        ic.push(self, 'import mechanics, sim; from alg import vector')
+        self.pool = []
+        ic.push(self, 'import mechanics, sim;from alg import vector')
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -89,7 +90,7 @@ class Interpreter(ic):
         name = next(line)
         if name in self.assigned:
             warn("You're about to replacing the old '{}'".format(name),
-                        DuplicationWarning)
+                 DuplicationWarning)
             if not self._confirm():
                 return ''
         if Type in self.moduledict:
@@ -102,8 +103,8 @@ class Interpreter(ic):
         except StopIteration:
             pass
 
-        return A.format(name = name, type = Type,
-                        module = self.moduledict[Type], arg = Arg)
+        return A.format(name=name, type=Type,
+                        module=self.moduledict[Type], arg=Arg)
 
     def _plot(self, line):
         '''plot x y sizetuple
@@ -123,7 +124,7 @@ class Interpreter(ic):
         pyline = ''
         name = next(line)
         for i in line:
-            pyline += name + '.{attr}={value};'.format(attr = i, value = next(line))
+            pyline += name + '.{attr}={value};'.format(attr=i, value=next(line))
         return pyline
 
     def _start(self, line):
@@ -190,10 +191,14 @@ class Interpreter(ic):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
 
-    def _translate(self):
-        # Aho-Corasick algorithm
-        pass
-
+    def __confirm(self):
+        while True:
+            IN = input('y/n ')
+            IN = IN.casefold()
+            if IN == 'y':
+                return True
+            elif IN == 'n':
+                return False
 
 if __name__ == '__main__':
     try:

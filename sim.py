@@ -1,14 +1,13 @@
-"""Physics Simulator by Finite Difference Method (FDM)"""
+"""Physics Simulator by Euler Method"""
 from itertools import combinations
 from error import UnderConstruction
-import sys
 import alg, geom
 import mechanics
 
 
 class event():
 
-    def __init__(self, mode = 'occurred', *arg):
+    def __init__(self, mode='occurred', *arg):
         if mode == 'occurred':
             pass
         elif mode == 'pass':
@@ -16,24 +15,19 @@ class event():
 
 
 class sim():
-    """FDM solver"""
 
-    def __init__(self, objs, name = None, field = None, step = 10 ** -1, var = []):
+    def __init__(self, objs, name=None, field=None, step=10 ** -1, var=[], const=None):
         # name should be aligned to be compatible with objs
         self.objs = objs
         # self.__comb = combinations(self.objs, 2)
         self.map = dict(zip(objs, name))
         self.field = field
         self.step = step
-        self.constraints = {}
-        __slots__ = ('objs', 'comb', 'field', 'step', 'end',
+        self.constraints = set(const)
+        __slots__ = ('objs', 'field', 'step', 'end',
                      'constriants', 'cache', 'X', 'V')
 
     def start(self, end):
-        """
-        WARNING: Using dict to store all combinations of two objects,
-        data loss would happen when too many objects encountered.
-        """
         dt = self.step
         i = int(end / dt)  # number of steps needed
         print (i)
@@ -69,6 +63,7 @@ class sim():
             if S1.distance(S2) <= max(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
                 if S1.isIntersect(S2):
                     # collision detected
+                    # discard change
                     v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
         self.X.append(x.copy())
         self.V.append(v.copy())
@@ -101,3 +96,47 @@ class sim():
                 i[self.map[obj]] = i[obj].list()
                 del i[obj]
         return str(X)
+
+
+class _cache():
+    """Imitating list to store fixed length of data
+
+    Cache object is list which is intended to store fixed
+    number of elements. Assignment or appending elements
+    to saturated cache would replace the first one. It's
+    not been optimized to store large amount of data. All
+    of your input data should be externally verified to
+    be of the same length.
+
+    """
+
+    def __init__(self, iterable, l=2):
+        """
+        Though the usage of the class is not limited to dict,
+        if you want to use this class in other ways, replace this.
+        """
+        self.__len = l  # NOTE: It's not the length of iterable!
+        self.__list = [None] * (self.__len - len(iterable)) + list(iterable)
+        self.__keys = iterable[0].keys()
+
+    def append(self, object):
+        self.__list.append(object)
+        self.__list = self.__list[1:]
+
+    def __iter__(self):
+        for i in self.__list:
+            yield i
+
+    def __getitem__(self, index):
+        return self.__list[-1][index]
+
+    def diff(self):
+        """compare objects stored in cache
+
+        Substract last two entry of cache. It won't
+        check if two elements are of the same length!
+        """
+        return {i:self.__list[-1][i] - self.__list[-2][i] for i in self.__keys}
+
+    def __str__(self):
+        return str(self.__list)
