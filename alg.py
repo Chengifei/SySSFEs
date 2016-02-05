@@ -16,7 +16,7 @@ class vector():
     This class is used as point object in geom.
 
     """
-    def __init__(self, a = 0, b = 0, c = 0, mode = 'rec'):
+    def __init__(self, a=0, b=0, c=0, mode='rec'):
 
         if mode == 'rec':
             self.x = a
@@ -46,7 +46,7 @@ class vector():
 
     def cross(self, other):
         m = matrix([['i', 'j', 'k'], self.list(), other.list()])
-        x, y, z = m.det(operator = True)
+        x, y, z = m.det(operator=True)
         return vector(x, y, z)
 
     def __add__(self, other):
@@ -61,7 +61,7 @@ class vector():
     def __abs__(self):
         return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
-    def trans(self, coord = 'pol'):
+    def trans(self, coord='pol'):
         if coord == 'pol':
             raise error.UnderConstruction
 
@@ -75,10 +75,13 @@ class vector():
             return vector()
 
     def isCollinear(self, other):
-        if self.unitize() == other.unitize() or \
-           self.unitize() == -other.unitize():
-            return True
-        return False
+        if self and other:
+            if self.unitize() == other.unitize():
+                return True
+            elif self.unitize() == -other.unitize():
+                return -1  # collinear but inversed direction
+            return False
+        return True
 
     def list(self):
         return [self.x, self.y, self.z]
@@ -107,7 +110,7 @@ class vector():
 
 class matrix():
 
-    def __init__(self, data, immutable = False):
+    def __init__(self, data, immutable=False):
         """define new matrix, data should be a nested
         list or tuple, with each list or tuple represents
         a column vector by default.
@@ -139,7 +142,7 @@ class matrix():
         row = [self.data[n][ROW] for n in range(self.row)]
         return row
 
-    def det(self, operator = False):
+    def det(self, operator=False):
         # determinant of a matrix ------------------------------------------------
         if self.isSquare:
             if operator and self.row == 3:
@@ -179,7 +182,7 @@ class matrix():
 
 class eqn():
 
-    def __init__(self, eqn, params = None):
+    def __init__(self, eqn, params=None):
         self.eqn = eqn
         self.params
 
