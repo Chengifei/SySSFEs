@@ -53,6 +53,9 @@ class field():
 
 class obj():
 
+    __slots__ = ('velocity', 'mass', 'pos', 'mode',
+                 'shape', 'charge', 'material', 'ability')
+
     def __init__(self, mass=1, initPos=alg.vector(), point=True, mode='rigid',
                  charge=False, initv=alg.vector(), material=None):
         self.mass = mass
@@ -66,14 +69,6 @@ class obj():
             self.ability = True
         self.velocity = initv
         self.material = material
-        __slots__ = ('velocity', 'mass', 'pos', 'mode',
-                     'shape', 'charge', 'material', 'ability')
-
-    def fix(self):
-        self.fixed = True
-
-    def shape(self, geom):
-        self.shape = geom
 
     def getforce(self, obj):
         if self.ability:

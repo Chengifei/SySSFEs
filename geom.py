@@ -97,13 +97,19 @@ class segment(line):
             return True
         elif det == 0:
             return 2
+        elif det == 2:
+            if self:  # other is point
+                return self.isOnSeg(other.p)
+            return other.isOnSeg(self.p)
         return False  # det=1 not intersecting
 
     def isOnSeg(self, point):
         if self:
-            if self.isOnLine(point) and\
-               self.range[1] > point.x > self.range[0]:
-                return True
+            if self.isOnLine(point):
+                if self.range[1] > point.x > self.range[0]:
+                    return True
+                elif point.x in self.range:
+                    return 2
             return False
         return self.endpoint1 == point
 

@@ -4,7 +4,6 @@ from error import UnderConstruction
 import alg, geom
 import mechanics
 
-
 class event():
 
     def __init__(self, mode='occurred', *arg):
@@ -13,81 +12,86 @@ class event():
         elif mode == 'pass':
             pass
 
-
 class sim():
 
-    def __init__(self, objs, name=None, field=None, step=10 ** -1, var=[], const=None):
+    outputtable = str.maketrans('', '', "'{}[]")
+    heuristiclist = [i for i in range(2, 6)]
+
+    def __init__(self, objs, name=None, field=None, step=10 ** -1, const=None, allowance=10 ** -2):
         # name should be aligned to be compatible with objs
         self.objs = objs
-        # self.__comb = combinations(self.objs, 2)
+        self.allowance = allowance
         self.map = dict(zip(objs, name))
         self.field = field
-        self.step = step
-        self.constraints = set(const)
-        __slots__ = ('objs', 'field', 'step', 'end',
-                     'constriants', 'cache', 'X', 'V')
+        self.step, self.__step = step, step
+        self.flag = False  # after collision flag
+        self.ccflag = False  # collision critical
+        if const:
+            self.constraints = set(const)
+        else:
+            self.constraints = set()
 
     def start(self, end):
-        dt = self.step
-        i = int(end / dt)  # number of steps needed
-        print (i)
+        '''sim.start(end) -> None'''
+        self.i = 0
+        n = int(end / self.step)  # number of steps needed
         x = dict(zip(self.objs, [obj.pos for obj in self.objs]))
         v = dict(zip(self.objs, [obj.velocity for obj in self.objs]))
         self.X = [x.copy()]
         self.V = [v.copy()]
-        # compute initial distance between each other
 
-        for i in range(i):
-            for Obj in self.objs:
-                pos = x[Obj]
-                try:
-                    F = sum([obj.getforce(Obj) for obj in self.objs if obj != Obj])\
-                    + self.field[pos]  # compute resultant force
-                except:
-                    F = alg.vector()
-                a = F / Obj.mass
-                x[Obj] += (v[Obj] + a * self.step / 2) * dt
-                # should have been improved
-                v[Obj] += a * dt
+        while self.i < n:
 
-            self.__check(v, x)
+            if self.flag:
+                self.__step = self.step
+                self.flag = False
 
-    def __check(self, v, x):
+            x, v = self.compute(x, v)
+            self.check(x, v)
+
+            self.i += 1
+
+
+    def check(self, x, v):
         # check constraints
-        # pass
-        # check collision
-        for a in combinations(self.objs, 2):  # enumerate to find collision
-            o1, o2 = a[0], a[1]
-            S1 = geom.segment(x[o1], x[o1] + v[o1] * self.step)
-            S2 = geom.segment(x[o2], x[o2] + v[o2] * self.step)
-            if S1.distance(S2) <= max(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
-                if S1.isIntersect(S2):
-                    # collision detected
-                    # discard change
-                    v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
-        self.X.append(x.copy())
+        f = map(eval, self.constraints)
+        if not all(f):
+            self.heuristic(x, v)
+        for o1, o2 in combinations(self.objs, 2):  # enumerate to find collision
+            S1 = geom.segment(x[o1], x[o1] + v[o1] * self.__step)
+            S2 = geom.segment(x[o2], x[o2] + v[o2] * self.__step)
+            vmax = max(abs(v[o1]), abs(v[o2]))
+            if S1.distance(S2) <= vmax * self.__step:  # coplanarity
+                # coplanarity critical
+                det = S1.isIntersect(S2)
+                if det:
+                    if det == 2 or vmax * self.__step <= self.allowance:
+                        v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
+                    else:
+                        self.V.append(v.copy())
+                        self.heuristic(x, v)
         self.V.append(v.copy())
+        self.X.append(x.copy())
 
-    def __isCoplannar(self, point1, point2, d1, d2):
-        """Check if two trajectories are coplanar"""
-        D = point1 - point2
-        A = alg.matrix([d1, D, d2])
-        if A.det() == 0:
-            return True
-        return False
+    def compute(self, x, v):
+        for Obj in self.objs:
+            pos = x[Obj]
+            try:
+                F = sum([obj.getforce(Obj) for obj in self.objs if obj != Obj])\
+                + self.field[pos]  # compute resultant force
+            except TypeError:
+                F = alg.vector()
+            a = F / Obj.mass
+            x[Obj] += (v[Obj] + a * self.__step / 2) * self.__step
+            # should have been improved
+            v[Obj] += a * self.__step
+        return x, v
 
-    def __isIntersect(self, p1, p2, p3, p4):
-        """Check if p1p2 and p3p4 intersects
-
-        Iif two segments intersects
-
-        """
-        AB = p1 - p2
-        AC = p1 - p3
-        AD = p1 - p4
-        if AB.cross(AC).dot(AB.cross(AD)) <= 0:
-            return True
-        return False
+    def heuristic(self, x, v):
+        if self.heuristiclist:
+            self.__step = self.step / self.heuristiclist.pop(0)
+        x, v = self.compute(x, v)
+        self.check(x, v)
 
     def __str__(self):
         X = self.X
@@ -95,7 +99,10 @@ class sim():
             for obj in self.objs:
                 i[self.map[obj]] = i[obj].list()
                 del i[obj]
-        return str(X)
+        X = str(X)
+        X = X.replace("}, {", '\n')
+        X = X.translate(sim.outputtable)
+        return X + '\n'
 
 
 class _cache():
@@ -127,16 +134,12 @@ class _cache():
         for i in self.__list:
             yield i
 
+    def rollback(self):
+        self.__list.insert(None, 0)
+        self.__list = self.__list[:-1]
+
     def __getitem__(self, index):
         return self.__list[-1][index]
-
-    def diff(self):
-        """compare objects stored in cache
-
-        Substract last two entry of cache. It won't
-        check if two elements are of the same length!
-        """
-        return {i:self.__list[-1][i] - self.__list[-2][i] for i in self.__keys}
 
     def __str__(self):
         return str(self.__list)

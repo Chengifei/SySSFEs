@@ -85,8 +85,7 @@ class Interpreter(ic):
         Type = next(line)
         name = next(line)
         if name in self.assigned:
-            warn("You're about to replacing the old '{}'".format(name),
-                 DuplicationWarning)
+            warn("You're about to replacing the old '{}'".format(name))
             if not self._confirm():
                 return ''
         if Type in self.moduledict:

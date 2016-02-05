@@ -16,6 +16,9 @@ class vector():
     This class is used as point object in geom.
 
     """
+
+    __slots__ = ('x', 'y', 'z')
+
     def __init__(self, a=0, b=0, c=0, mode='rec'):
 
         if mode == 'rec':
@@ -30,7 +33,6 @@ class vector():
             self.x = a * math.sin(b) * math.cos(c)
             self.y = a * math.sin(b) * math.sin(c)
             self.z = a * math.cos(b)
-        __slots__ = ('x', 'y', 'z')
 
     def __mul__(self, scalar):
         return vector(scalar * self.x, scalar * self.y, scalar * self.z)
@@ -75,13 +77,21 @@ class vector():
             return vector()
 
     def isCollinear(self, other):
+        """Collinearity check
+
+        Return table:
+        exactly same direction --- True
+        opposing direction ------- -1
+        zero-vector collinear ---- 2
+        None of above ------------ False
+        """
         if self and other:
             if self.unitize() == other.unitize():
                 return True
             elif self.unitize() == -other.unitize():
                 return -1  # collinear but inversed direction
             return False
-        return True
+        return 2
 
     def list(self):
         return [self.x, self.y, self.z]
@@ -184,7 +194,7 @@ class eqn():
 
     def __init__(self, eqn, params=None):
         self.eqn = eqn
-        self.params
+        self.params = params
 
     def solve(self):
         pass
