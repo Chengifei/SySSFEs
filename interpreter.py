@@ -23,9 +23,6 @@ class Interpreter(ic):
     moduledict = {'field':'mechanics', 'obj':'mechanics', 'constraint':'mechanics',
                   'sim':'sim', 'event':'sim'}
 
-    aliasdict = {}
-    aliasstatus = False
-
     def __init__(self):
         ic.__init__(self)
         self.assigned = {}
@@ -51,20 +48,19 @@ class Interpreter(ic):
         and process and send it to python.
 
         """
-
         self.gen = (i for i in line.split())
         current = next(self.gen)
         if current == 'p':
             return ' '.join(self.gen)
         elif current in {'create', 'c'}:
             return self._create(self.gen)
-        elif current in {'plot'}:
+        elif current in {'plot', 'p'}:
             self._plot(self.gen)
         elif current in {'set', 's'}:
             return self._set(self.gen)
         elif current == 'start':
             return self._start(self.gen)
-        elif current in {'print', 'p'}:
+        elif current == 'print':
             return self._print(self.gen)
         elif current == 'list':
             return self._list(self.gen)
@@ -89,8 +85,7 @@ class Interpreter(ic):
         Type = next(line)
         name = next(line)
         if name in self.assigned:
-            warn("You're about to replacing the old '{}'".format(name),
-                 DuplicationWarning)
+            warn("You're about to replacing the old '{}'".format(name))
             if not self._confirm():
                 return ''
         if Type in self.moduledict:
@@ -160,19 +155,6 @@ class Interpreter(ic):
         return ''
 
     def _alias(self, line):
-        """alias originalname=abbreviation [...]
-
-        This is a feature handled in interpreter
-        level. It enables you to define your own
-        abbr. for both default and user-defined
-        names. You can remove alias by typing
-        like: alias A=A
-
-        """
-        self.aliasstatus = True
-        for eqn in line:
-            eqn = eqn.split()
-            self.aliasdict[eqn[0]] = eqn[1]
         return ''
 
     def _delete(self, line):
