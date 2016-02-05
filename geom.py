@@ -7,7 +7,7 @@ class geom():
 
 class line(geom):
 
-    def __init__(self, *args, mode = '2p'):
+    def __init__(self, *args, mode='2p'):
         """generic line generator
 
         Different types of arguments can be used
@@ -68,7 +68,7 @@ class line(geom):
         return False
 
     def __getitem__(self, x):
-        raise error.UnderConstrution
+        raise error.UnderConstruction
         return alg.vector()
 
 class segment(line):
@@ -83,14 +83,21 @@ class segment(line):
         self.vector = p2 - p1
 
     def isIntersect(self, other):
-        if self.vector.cross(other.endpoint1 - self.endpoint1)\
-                        .dot(other.endpoint2 - self.endpoint1) < 0:
+        """Check if two segments intersects
+
+        It has 3 return values, only False means not
+        intersecting. True means intersecting and in
+        middle of both segments. 2 means intersect but
+        on at least on one endpoint.
+
+        """
+        det = self.vector.cross(other.endpoint1 - self.endpoint1).isCollinear(
+              self.vector.cross(other.endpoint2 - self.endpoint2))
+        if det == -1:
             return True
-        elif not self:
-            return other.isOnSeg(self.endpoint1)
-        elif not other:
-            return self.isOnSeg(other.endpoint1)
-        return False
+        elif det == 0:
+            return 2
+        return False  # det=1 not intersecting
 
     def isOnSeg(self, point):
         if self:
@@ -114,7 +121,7 @@ class polygon(geom):
 
     def __sort(self):
         C = alg.vector(sum(A[0] for A in self.vertex) / self.n,
-                   sum(A[1] for A in self.vertex) / self.n)
+                       sum(A[1] for A in self.vertex) / self.n)
         det = []
         for i in self.vertex:
             t = i - C
@@ -130,15 +137,15 @@ class polygon(geom):
 
 class circle(geom):
 
-    def __init__(self, center = alg.vector(), radius = None):
+    def __init__(self, center=alg.vector(), radius=None):
         self.center = center
         self.radius = radius
 
 class funcCurve(geom):
 
-    def __init__(self, x = None, y = None):
+    def __init__(self, x=None, y=None):
         pass
 
-linetype = type(line(mode = 0))
+linetype = type(line(mode=0))
 vectortype = type(alg.vector())
 circletype = type(circle())

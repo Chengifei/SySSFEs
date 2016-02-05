@@ -1,14 +1,13 @@
-"""Physics Simulator by Finite Difference Method (FDM)"""
+"""Physics Simulator by Euler Method"""
 from itertools import combinations
 from error import UnderConstruction
-import sys
 import alg, geom
 import mechanics
 
 
 class event():
 
-    def __init__(self, mode = 'occurred', *arg):
+    def __init__(self, mode='occurred', *arg):
         if mode == 'occurred':
             pass
         elif mode == 'pass':
@@ -16,24 +15,19 @@ class event():
 
 
 class sim():
-    """FDM solver"""
 
-    def __init__(self, objs, name = None, field = None, step = 10 ** -1, var = []):
+    def __init__(self, objs, name=None, field=None, step=10 ** -1, var=[], const=None):
         # name should be aligned to be compatible with objs
         self.objs = objs
         # self.__comb = combinations(self.objs, 2)
         self.map = dict(zip(objs, name))
         self.field = field
         self.step = step
-        self.constraints = {}
-        __slots__ = ('objs', 'comb', 'field', 'step', 'end',
+        self.constraints = set(const)
+        __slots__ = ('objs', 'field', 'step', 'end',
                      'constriants', 'cache', 'X', 'V')
 
     def start(self, end):
-        """
-        WARNING: Using dict to store all combinations of two objects,
-        data loss would happen when too many objects encountered.
-        """
         dt = self.step
         i = int(end / dt)  # number of steps needed
         print (i)
@@ -69,6 +63,7 @@ class sim():
             if S1.distance(S2) <= max(abs(v[o1]), abs(v[o2])) * self.step:  # coplanarity
                 if S1.isIntersect(S2):
                     # collision detected
+                    # discard change
                     v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
         self.X.append(x.copy())
         self.V.append(v.copy())
@@ -115,7 +110,7 @@ class _cache():
 
     """
 
-    def __init__(self, iterable, l = 2):
+    def __init__(self, iterable, l=2):
         """
         Though the usage of the class is not limited to dict,
         if you want to use this class in other ways, replace this.
