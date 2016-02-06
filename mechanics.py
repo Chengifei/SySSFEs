@@ -53,21 +53,22 @@ class field():
 
 class obj():
 
-    __slots__ = ('velocity', 'mass', 'pos', 'mode',
-                 'shape', 'charge', 'material', 'ability')
+    __slots__ = ('name', 'mass', 'ability', 'pos', 'velocity', 'mode',
+                 'shape', 'charge', 'material')
 
-    def __init__(self, mass=1, initPos=alg.vector(), point=True, mode='rigid',
+    def __init__(self, name=None, mass=1, initPos=alg.vector(), point=True, mode='rigid',
                  charge=False, initv=alg.vector(), material=None):
+        self.name = name
         self.mass = mass
         self.ability = False
         self.pos = initPos
+        self.velocity = initv
         self.mode = mode
         if point:
             self.shape = 0
         if charge:
             self.charge = charge
             self.ability = True
-        self.velocity = initv
         self.material = material
 
     def getforce(self, obj):
@@ -75,6 +76,9 @@ class obj():
             return
         return alg.vector()
         raise UnderConstruction
+
+    def __repr__(self):
+        return self.name
 
 
 class constraint():
