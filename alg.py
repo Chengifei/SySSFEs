@@ -96,7 +96,7 @@ class vector():
     def list(self):
         return [self.x, self.y, self.z]
 
-    def __str__(self):
+    def __repr__(self):
         return str(self.list())
 
     def __len__(self):

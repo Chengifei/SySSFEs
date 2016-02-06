@@ -84,6 +84,8 @@ class Interpreter(ic):
         """
         Type = next(line)
         name = next(line)
+        if '"' in name:
+            warn('Invalid name')
         if name in self.assigned:
             warn("You're about to replacing the old '{}'".format(name))
             if not self._confirm():
@@ -93,10 +95,11 @@ class Interpreter(ic):
         else:
             warn('Unknown Object {!s}'.format(Type))
         self.assigned[name] = Type
-        try:
-            Arg = ','.join(line)
-        except StopIteration:
-            pass
+        Arg = ','.join(line)
+        if Arg:
+            Arg += ',name="{name}"'.format(name=name)
+        else:
+            Arg = 'name="{name}"'.format(name=name)
 
         return A.format(name=name, type=Type,
                         module=self.moduledict[Type], arg=Arg)

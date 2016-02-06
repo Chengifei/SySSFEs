@@ -116,7 +116,7 @@ class segment(line):
     def __bool__(self):
         return self.vector.__bool__()
 
-    def __str__(self):
+    def __repr__(self):
         return str([str(self.endpoint1), str(self.endpoint2)])
 
 class polygon(geom):
