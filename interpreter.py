@@ -13,6 +13,7 @@ import sys
 from code import InteractiveConsole
 from error import *
 
+
 sys.ps1 = 'Phyco >'
 warn = sys.stderr.write
 ic = InteractiveConsole
@@ -28,7 +29,7 @@ class Interpreter(ic):
         self.assigned = {}
         self.params = set()
         self.pool = []
-        ic.push(self, 'import mechanics, sim;from alg import vector')
+        ic.push(self, 'import mechanics, sim;from linalg import vector,field')
 
     def push(self, lines):
         self.pool = lines.split(';')

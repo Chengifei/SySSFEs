@@ -1,6 +1,8 @@
 '''This is a PhycoE module deal with dynamics.
 For now, it supports ,specifically, collision detection and 2-D dynamics.'''
-import alg
+import linalg, geom
+from __init__ import G, epsilon0
+from math import pi
 from error import UnderConstruction
 
 
@@ -25,39 +27,22 @@ def colSolver(m=None, v=None, e=1):
     return v1f, v2f
 
 
-class field():
-
-    def __init__(self, x=0, y=0, z=0, dim=3):
-        self.dim = dim
-        self.x = compile(str(x), '<string>', mode='eval')
-        self.y = compile(str(y), '<string>', mode='eval')
-        self.z = compile(str(z), '<string>', mode='eval')
-        __slots__ = ('dim', 'x', 'y', 'z')
-
-    def __getitem__(self, index):
-        x, y, z = index.x, index.y, index.z
-        return alg.vector(eval(self.x), eval(self.y), eval(self.z))
-
-    def __add(self, other):
-        return field(eval(self.x) + eval(self.y))
-
-    def curl(self, pos):
-        return
-
-    def grad(self, pos):
-        return
-
-    def div(self, pos):
-        return
-
-
 class obj():
 
-    __slots__ = ('name', 'mass', 'ability', 'pos', 'velocity', 'mode',
-                 'shape', 'charge', 'material')
+    __slots__ = ('name', 'mass', 'ability', 'pos', 'velocity',
+                 'mode', 'shape', 'charge', 'material')
 
-    def __init__(self, name=None, mass=1, initPos=alg.vector(), point=True, mode='rigid',
-                 charge=False, initv=alg.vector(), material=None):
+    def newtonianGravity(self, other, r):
+        return G * self.mass * other.mass / r / r
+
+    def coulombForce(self, other, r):
+        return self.charge * other.charge / 4 / pi / epsilon0
+
+    def magneticForce(self):
+        pass
+
+    def __init__(self, name=None, mass=1, initPos=linalg.vector(), point=True, mode='rigid',
+                 charge=False, initv=linalg.vector(), material=None):
         self.name = name
         self.mass = mass
         self.ability = False
@@ -74,7 +59,7 @@ class obj():
     def getforce(self, obj):
         if self.ability:
             return
-        return alg.vector()
+        return linalg.vector()
         raise UnderConstruction
 
     def __repr__(self):

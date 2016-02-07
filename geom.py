@@ -1,4 +1,4 @@
-import alg
+import linalg
 from math import sqrt
 import error
 
@@ -69,7 +69,7 @@ class line(geom):
 
     def __getitem__(self, x):
         raise error.UnderConstruction
-        return alg.vector()
+        return linalg.vector()
 
 class segment(line):
 
@@ -126,7 +126,7 @@ class polygon(geom):
         self.n = len(self.vertex)
 
     def __sort(self):
-        C = alg.vector(sum(A[0] for A in self.vertex) / self.n,
+        C = linalg.vector(sum(A[0] for A in self.vertex) / self.n,
                        sum(A[1] for A in self.vertex) / self.n)
         det = []
         for i in self.vertex:
@@ -143,7 +143,7 @@ class polygon(geom):
 
 class circle(geom):
 
-    def __init__(self, center=alg.vector(), radius=None):
+    def __init__(self, center=linalg.vector(), radius=None):
         self.center = center
         self.radius = radius
 
@@ -153,5 +153,5 @@ class funcCurve(geom):
         pass
 
 linetype = type(line(mode=0))
-vectortype = type(alg.vector())
+vectortype = type(linalg.vector())
 circletype = type(circle())

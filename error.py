@@ -1,4 +1,3 @@
-
 class MathError(Exception):
     pass
 
@@ -15,4 +14,7 @@ class DuplicationWarning(UserWarning):
     pass
 
 class InvalidKeyword(Exception):
+    pass
+
+class UncompatibleEnvironment(Exception):
     pass
