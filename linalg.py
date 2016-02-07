@@ -17,7 +17,7 @@ class vector():
 
     """
 
-    __slots__ = ('x', 'y', 'z')
+    __slots__ = ('x', 'y', 'z', 'mode')
 
     def __init__(self, a=0, b=0, c=0, mode='rec'):
 
@@ -33,6 +33,7 @@ class vector():
             self.x = a * math.sin(b) * math.cos(c)
             self.y = a * math.sin(b) * math.sin(c)
             self.z = a * math.cos(b)
+        self.mode = mode
 
     def __mul__(self, scalar):
         return vector(scalar * self.x, scalar * self.y, scalar * self.z)
@@ -63,8 +64,11 @@ class vector():
     def __abs__(self):
         return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
 
-    def trans(self, coord='pol'):
-        if coord == 'pol':
+    def trans(self, coord='cyl'):
+        if coord == 'cyl':
+            self.x = math.hypot(self.x, self.y)
+            self.y = math.atan2(self.y, self.x)
+        if coord == 'sph':
             raise error.UnderConstruction
 
     def angle(self, other):
@@ -196,7 +200,7 @@ class eqn():
         self.eqn = eqn
         self.params = params
 
-    def solve(self):
+    def solve(self):  # solve by newton's nethod
         pass
 
     def __str__(self):
@@ -206,3 +210,36 @@ class operator():
 
     def __init__(self):
         pass
+
+    def __call__(self, expr):
+        pass
+
+class field():
+
+    __slots__ = ('arglist', 'x', 'y', 'z')
+
+    def __init__(self, x=0, y=0, z=0, *arg):
+        self.x = compile(str(x), '<string>', mode='eval')
+        self.y = compile(str(y), '<string>', mode='eval')
+        self.z = compile(str(z), '<string>', mode='eval')
+        self.arglist = arg
+
+    def __call__(self, index):
+        x, y, z = index.x, index.y, index.z
+        return vector(eval(self.x), eval(self.y), eval(self.z))
+
+    def __add(self, other):
+        return field(eval(self.x) + eval(self.y))
+
+    def curl(self, pos):
+        return
+
+    def grad(self, pos):
+        return
+
+    def div(self, pos):
+        return
+
+diff = operator()
+pdiff = operator()
+int = operator()

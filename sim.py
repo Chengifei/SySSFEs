@@ -1,31 +1,30 @@
 """Physics Simulator by Euler Method"""
 from itertools import combinations
-import alg
+from linalg import vector
+from math import isclose, fsum
 from geom import segment
+from pdb import set_trace
 import mechanics
-import pdb
 
 class event():
 
-    def __init__(self, mode='occurred', *arg):
-        if mode == 'occurred':
-            pass
-        elif mode == 'pass':
-            pass
+    def __init__(self, obj, *arg):
+        pass
 
 class sim():
 
-    outputtable = str.maketrans('', '', "'{}[]")
+    outputtable = str.maketrans('', '', "'{}")
     heuristiclist = [i for i in range(2, 11)]
 
-    def __init__(self, objs, name=None, field=None, step=10 ** -1,
-                 const=None, allowance=10 ** -2):
+    def __init__(self, objs, name=None, step=10 ** -1, field=None,
+                 const=None, tol=10 ** -2):
         # name should be aligned to be compatible with objs
         self.objs = objs
-        self.allowance = allowance
         self.field = field
+        self.tol = tol  # tolerance
         self.step, self.__step = step, step
-        self.cflag = False
+        self.cflag = False  # critical flag
+        self.heuabort = False  # heuristic abortion flag
         if const:
             self.constraints = set(const)
         else:
@@ -46,13 +45,11 @@ class sim():
                 self.v.append(v)
             elif det == 0:
                 self.cflag = True
-                if self.heuristic():
-                    self.i -= 1
-                else:
-                    self.x.append(x)
-                    self.v.append(v)
+                if not self.heuristic():
+                    self.heuabort = True
+                self.i -= 1
             else:
-                self.cflag = False
+                self.cflag, self.heuabort = False, False
                 self.__step = self.step
                 self.x.append(x)
                 self.v.append(det)
@@ -71,7 +68,7 @@ class sim():
                 # coplanarity critical
                 det = S1.isIntersect(S2)
                 if det:
-                    if det == 2 or vmax * self.__step <= self.allowance:
+                    if det == 2 or vmax * self.__step <= self.tol or self.heuabort:
                         v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
                         return v
                     else:
@@ -81,11 +78,8 @@ class sim():
     def compute(self):
         x, v = self.x[-1].copy(), self.v[-1].copy()
         for Obj in self.objs:
-            try:
-                F = sum([obj.getforce(Obj) for obj in self.objs if obj != Obj])\
-                + self.field[x[Obj]]  # compute resultant force
-            except TypeError:
-                F = alg.vector()
+            # F = Obj.getforce(self.objs[1])  # compute resultant force
+            F = vector(0, -10)
             a = F / Obj.mass
             # should have been improved
             x[Obj] += (v[Obj] + a * self.__step / 2) * self.__step
@@ -100,7 +94,10 @@ class sim():
         return False
 
     def __str__(self):
-        X = str(self.x).replace("}, {", '\n')
+        output = {}
+        for obj in self.objs:
+            output[obj] = [_f[obj] for _f in self.x]
+        X = str(output).replace("}, {", '\n')
         X = X.translate(sim.outputtable)
         return X + '\n'
 
