@@ -4,6 +4,7 @@ This is used both in phycomath.genmath.expr and
 integrated interpreter for aliasing.
 
 """
+from pdb import set_trace
 # import collections
 # dict = collections.OrderedDict()
 
@@ -13,60 +14,60 @@ class ACtrie():
 
     def __init__(self, patternset):
         self.set = patternset
-        _len = map(len, patternset)
-        self.maxlen = max(_len)
+        self.maxlen = len(max(patternset, key=len))
+        self.minlen = len(min(patternset, key=len))
         self.root = ACnode('ROOT', None, False)
         # should probably move to be class variable
         self.nodes = set()
         self.links = set()
-        self.inpattern = set()
-        self.nodesbylevel = [set() for i in range(self.maxlen + 1)]
+        self.inPattern = set()
+        self.nodesByLevel = [set() for i in range(self.maxlen + 1)]
         # self.root not included
         self.curnode = self.root
         for i in self.set:
             self.add(i)
-        self.linkredir()  # link all redirection in AC-trie
-        print(self.nodesbylevel)
+        self.linkRedir()  # link all redirection in AC-trie
+        self.linkPara()  # link all parallel match
 
-    def add(self, str):
+    def add(self, str):  # WARNING:can be called without setting self.max/minlen
         parent = self.root
         for i in str[:-1]:
             _node = ACnode(i, parent)
             if _node not in self.nodes:
                 self.nodes.add(_node)
-                self.nodesbylevel[parent.level + 1].add(_node)
+                self.nodesByLevel[parent.level + 1].add(_node)
             parent = _node
         _node = ACnode(str[-1], parent, str)  # mark end of string
         self.nodes.add(_node)
-        self.inpattern.add(_node)
-        self.nodesbylevel[parent.level + 1].add(_node)
-        self.linkpara()
+        self.inPattern.add(_node)
+        self.nodesByLevel[parent.level + 1].add(_node)
         # Heretofore, all parent-child relation linked
 
-    def linkredir(self):  # redirection linker
-        for node in self.nodesbylevel[1]:
+    def linkRedir(self):  # redirection linker
+        for node in self.nodesByLevel[1]:
             node.link(self.root)
-            self.links.add(str(node) + ' linked to ROOT')
+            self.links.add((node, 'ROOT'))
         for i in range(self.maxlen, 1, -1):  # link redirection from bottom
-            for node in self.nodesbylevel[i]:
+            for node in self.nodesByLevel[i]:
                 for j in range(1, i):  # from the 1st level (not zeroth)
-                    for Node in self.nodesbylevel[j]:
+                    for Node in self.nodesByLevel[j]:
                         if node.char == Node.char:
                             node.link(Node)
-                            self.links.add(str(node) + ' linked to ' + str(Node))
+                            self.links.add((node, Node))
                             break
                     break
-                if not node.redirect:
-                    self.links.add(str(node) + ' linked to ROOT')
+                break
+            if not node.redirect:
+                    self.links.add((node, 'ROOT'))
                     node.link(self.root)
 
-    def linkpara(self):  # parallel match linker
+    def linkPara(self):  # parallel match linker
         pass
 
-    def proc(self, str):
+    def process(self, str):
         level = 0  # at root
         for i in str:
-            if i in self.nodesbylevel[level + 1]:
+            if i in self.nodesByLevel[level + 1]:
                 level += 1
         pass
 
@@ -79,9 +80,9 @@ class ACnode():
         self.isEndOfStr = endOfStr  # corresponding string
         self.children = set()
         self.redirect = None  # go to self.redirect if match fails
-        self.parallel = None
-        self.repr = str(self.char) + str(self.parent)
-        self.repr = self.repr[::-1]  # reverse the sequence for human
+        self.parallel = None  # one node can have only one but can be linked
+        # self.repr = str(self.char) + str(self.parent)  # guaranteed correct
+        self.repr = repr(self.parent) + self.char
         try:
             self.level = parent.level + 1
         except AttributeError:
@@ -95,7 +96,7 @@ class ACnode():
         elif type == 1:
             self.children.add(other)  # link to
         else:
-            self.parallel = other  # link from
+            self.parallel = other  # bidirection
 
     def __repr__(self):
         if self.char == 'ROOT':
@@ -113,5 +114,5 @@ class ACnode():
 
 if __name__ == '__main__':
     # struct = ACtrie({'a', 'ab', 'bab', 'bc', 'bca', 'c', 'caa'})
-    struct = ACtrie({'a', 'ab', 'bab'})
-    print(struct.alllinks)
+    struct = ACtrie({'caa', 'bca'})
+    print(struct.links)
