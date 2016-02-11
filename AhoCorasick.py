@@ -1,8 +1,9 @@
-'''
-Created on Feb 4, 2016
+"""Aho-Corasick Automaton for string pattern-match
 
-@author: YFZHENG
-'''
+This is used both in phycomath.genmath.expr and
+integrated interpreter for aliasing.
+
+"""
 # import collections
 # dict = collections.OrderedDict()
 
@@ -16,45 +17,51 @@ class ACtrie():
         self.maxlen = max(_len)
         self.root = ACnode('ROOT', None, False)
         # should probably move to be class variable
-        self.allnodes = set()
-        self.alllinks = set()
+        self.nodes = set()
+        self.links = set()
+        self.inpattern = set()
         self.nodesbylevel = [set() for i in range(self.maxlen + 1)]
         # self.root not included
         self.curnode = self.root
         for i in self.set:
             self.add(i)
-        self.link()  # link all redirection in AC-trie
+        self.linkredir()  # link all redirection in AC-trie
         print(self.nodesbylevel)
 
     def add(self, str):
         parent = self.root
         for i in str[:-1]:
-            _T = ACnode(i, parent)
-            if _T not in self.allnodes:
-                self.allnodes.add(_T)
-                self.nodesbylevel[parent.level + 1].add(_T)
-            parent = _T
-        _T = ACnode(str[-1], parent, str)  # mark end of string
-        self.allnodes.add(_T)
-        self.nodesbylevel[parent.level + 1].add(_T)
+            _node = ACnode(i, parent)
+            if _node not in self.nodes:
+                self.nodes.add(_node)
+                self.nodesbylevel[parent.level + 1].add(_node)
+            parent = _node
+        _node = ACnode(str[-1], parent, str)  # mark end of string
+        self.nodes.add(_node)
+        self.inpattern.add(_node)
+        self.nodesbylevel[parent.level + 1].add(_node)
+        self.linkpara()
         # Heretofore, all parent-child relation linked
 
-    def link(self):  # linker
+    def linkredir(self):  # redirection linker
         for node in self.nodesbylevel[1]:
             node.link(self.root)
-            self.alllinks.add(str(node) + ' linked to ROOT')
+            self.links.add(str(node) + ' linked to ROOT')
         for i in range(self.maxlen, 1, -1):  # link redirection from bottom
             for node in self.nodesbylevel[i]:
                 for j in range(1, i):  # from the 1st level (not zeroth)
                     for Node in self.nodesbylevel[j]:
                         if node.char == Node.char:
                             node.link(Node)
-                            self.alllinks.add(str(node) + ' linked to ' + str(Node))
+                            self.links.add(str(node) + ' linked to ' + str(Node))
                             break
                     break
                 if not node.redirect:
-                    self.alllinks.add(str(node) + ' linked to ROOT')
+                    self.links.add(str(node) + ' linked to ROOT')
                     node.link(self.root)
+
+    def linkpara(self):  # parallel match linker
+        pass
 
     def proc(self, str):
         level = 0  # at root
@@ -71,7 +78,8 @@ class ACnode():
         self.parent = parent
         self.isEndOfStr = endOfStr  # corresponding string
         self.children = set()
-        self.redirect = None
+        self.redirect = None  # go to self.redirect if match fails
+        self.parallel = None
         self.repr = str(self.char) + str(self.parent)
         self.repr = self.repr[::-1]  # reverse the sequence for human
         try:
@@ -83,9 +91,11 @@ class ACnode():
 
     def link(self, other, type=1):  # 0 for child, 1 for redirection
         if type:
-            self.redirect = other
+            self.redirect = other  # link to
+        elif type == 1:
+            self.children.add(other)  # link to
         else:
-            self.children.add(other)
+            self.parallel = other  # link from
 
     def __repr__(self):
         if self.char == 'ROOT':
@@ -94,6 +104,9 @@ class ACnode():
 
     def __eq__(self, other):
         return self.repr == other.repr
+
+    def isParallel(self, other):
+        return self.char == other.char
 
     def __hash__(self):
         return hash(self.repr)
