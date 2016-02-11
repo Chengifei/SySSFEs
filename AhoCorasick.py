@@ -9,6 +9,7 @@ Created on Feb 4, 2016
 
 class ACtrie():
 
+
     def __init__(self, patternset):
         self.set = patternset
         _len = map(len, patternset)
@@ -16,11 +17,14 @@ class ACtrie():
         self.root = ACnode('ROOT', None, False)
         # should probably move to be class variable
         self.allnodes = set()
+        self.alllinks = set()
         self.nodesbylevel = [set() for i in range(self.maxlen + 1)]
         # self.root not included
         self.curnode = self.root
         for i in self.set:
             self.add(i)
+        self.link()  # link all redirection in AC-trie
+        print(self.nodesbylevel)
 
     def add(self, str):
         parent = self.root
@@ -30,23 +34,26 @@ class ACtrie():
                 self.allnodes.add(_T)
                 self.nodesbylevel[parent.level + 1].add(_T)
             parent = _T
-        self.allnodes.add(ACnode(str[-1], parent, str))  # mark end of string
+        _T = ACnode(str[-1], parent, str)  # mark end of string
+        self.allnodes.add(_T)
+        self.nodesbylevel[parent.level + 1].add(_T)
         # Heretofore, all parent-child relation linked
-        self.link()  # link all redirection in AC-trie
 
     def link(self):  # linker
         for node in self.nodesbylevel[1]:
             node.link(self.root)
+            self.alllinks.add(str(node) + ' linked to ROOT')
         for i in range(self.maxlen, 1, -1):  # link redirection from bottom
             for node in self.nodesbylevel[i]:
                 for j in range(1, i):  # from the 1st level (not zeroth)
                     for Node in self.nodesbylevel[j]:
                         if node.char == Node.char:
                             node.link(Node)
+                            self.alllinks.add(str(node) + ' linked to ' + str(Node))
                             break
                     break
                 if not node.redirect:
-                    print(node, 'linked to root')
+                    self.alllinks.add(str(node) + ' linked to ROOT')
                     node.link(self.root)
 
     def proc(self, str):
@@ -66,6 +73,7 @@ class ACnode():
         self.children = set()
         self.redirect = None
         self.repr = str(self.char) + str(self.parent)
+        self.repr = self.repr[::-1]  # reverse the sequence for human
         try:
             self.level = parent.level + 1
         except AttributeError:
@@ -91,5 +99,6 @@ class ACnode():
         return hash(self.repr)
 
 if __name__ == '__main__':
-    struct = ACtrie({'a', 'ab', 'bab', 'bc', 'bca', 'c', 'caa'})
-    print(len(struct.allnodes))
+    # struct = ACtrie({'a', 'ab', 'bab', 'bc', 'bca', 'c', 'caa'})
+    struct = ACtrie({'a', 'ab', 'bab'})
+    print(struct.alllinks)
