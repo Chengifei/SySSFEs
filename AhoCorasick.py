@@ -3,7 +3,6 @@ Created on Feb 4, 2016
 
 @author: YFZHENG
 '''
-from pdb import set_trace
 # import collections
 # dict = collections.OrderedDict()
 
@@ -26,12 +25,11 @@ class ACtrie():
     def add(self, str):
         parent = self.root
         for i in str[:-1]:
-            # set_trace()
             _T = ACnode(i, parent)
             if _T not in self.allnodes:
                 self.allnodes.add(_T)
                 self.nodesbylevel[parent.level + 1].add(_T)
-                parent = _T
+            parent = _T
         self.allnodes.add(ACnode(str[-1], parent, str))  # mark end of string
         # Heretofore, all parent-child relation linked
         self.link()  # link all redirection in AC-trie
@@ -87,13 +85,11 @@ class ACnode():
         return self.repr
 
     def __eq__(self, other):
-        print(hash(self) - hash(other))
         return self.repr == other.repr
 
     def __hash__(self):
         return hash(self.repr)
 
 if __name__ == '__main__':
-    # struct = ACtrie({'a', 'ab', 'bab', 'bc', 'bca', 'c', 'caa'})
-    struct = ACtrie({'a', 'ab', 'bab', 'bc'})
-    print(struct.allnodes)
+    struct = ACtrie({'a', 'ab', 'bab', 'bc', 'bca', 'c', 'caa'})
+    print(len(struct.allnodes))
