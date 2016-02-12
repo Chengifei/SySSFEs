@@ -4,13 +4,16 @@ class MathError(Exception):
 class UnderConstruction(Exception):
     pass
 
+class UnexpectedError(Exception):
+    pass
+
 class CollisionDetected(UserWarning):
     pass
 
 class DuplicationWarning(UserWarning):
     pass
 
-class InvalidKeyword(SyntaxError):
+class InvalidKeyword(Exception):
     pass
 
 class UncompatibleEnvironment(Exception):
