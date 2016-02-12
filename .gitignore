@@ -5,4 +5,5 @@
 *.json
 **/Makefile
 /Doc
+/Doc/*
 !/Doc/_build/html/*.html
