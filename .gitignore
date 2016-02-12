@@ -1,4 +1,8 @@
 /.project
 /.pydevproject
-*.json
 /com.txt
+/__pycache__
+*.json
+**/Makefile
+/Doc
+!/Doc/_build/html/*.html
