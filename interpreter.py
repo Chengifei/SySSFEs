@@ -8,7 +8,6 @@ For help of specific command refer to themselves.
 
 """
 
-import json
 import sys
 from code import InteractiveConsole
 from error import *
@@ -30,7 +29,8 @@ class Interpreter(ic):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
-        ic.push(self, 'import mechanics, sim; from alg import vector')
+        self.pool = []
+        ic.push(self, 'import mechanics, sim; from linalg import vector,field')
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -39,7 +39,7 @@ class Interpreter(ic):
             try:
                 A = self.__lexer(line)
             except:
-                sys.stderr.write('Wrong Syntax\n')
+                warn('Wrong Syntax:{}\n'.format(str(A)))
                 A = ''
             ic.push(self, A)
 
@@ -63,7 +63,7 @@ class Interpreter(ic):
             return self._set(self.gen)
         elif current == 'start':
             return self._start(self.gen)
-        elif current in {'print', 'p'}:
+        elif current in {'print'}:
             return self._print(self.gen)
         elif current == 'list':
             return self._list(self.gen)
@@ -73,7 +73,7 @@ class Interpreter(ic):
             return self._delete(self.gen)
         elif current in {'help', 'h'}:
             return self._help(self.gen)
-        sys.stderr.write('Wrong Syntax\n')
+        warn('Wrong Syntax:{}\n'.format(line))
         return ''
 
     def _create(self, line):
@@ -87,24 +87,25 @@ class Interpreter(ic):
         """
         Type = next(line)
         name = next(line)
+        if '"' in name:
+            warn('Invalid name')
         if name in self.assigned:
-            warn('replacing the old "{}"'.format(name),
-                        DuplicationWarning)
-            # Should be improved to ask for permission.
+            warn("You're about to replacing the old '{}'".format(name))
+            if not self._confirm():
+                return ''
         if Type in self.moduledict:
             A = '{name}={module}.{type}({arg})'
         else:
             warn('Unknown Object {!s}'.format(Type))
         self.assigned[name] = Type
-        Arg = ''
-        try:
-            for arg in line:
-                Arg += arg + '=' + next(line)
-        except StopIteration:
-            warn('Inconsistent!')
+        Arg = ','.join(line)
+        if Arg:
+            Arg += ',name="{name}"'.format(name=name)
+        else:
+            Arg = 'name="{name}"'.format(name=name)
 
-        return A.format(name = name, type = Type,
-                        module = self.moduledict[Type], arg = Arg)
+        return A.format(name=name, type=Type,
+                        module=self.moduledict[Type], arg=Arg)
 
     def _plot(self, line):
         '''plot x y sizetuple
@@ -124,7 +125,7 @@ class Interpreter(ic):
         pyline = ''
         name = next(line)
         for i in line:
-            pyline += name + '.{attr}={value};'.format(attr = i, value = next(line))
+            pyline += name + '.{attr}={value};'.format(attr=i, value=next(line))
         return pyline
 
     def _start(self, line):
@@ -195,16 +196,16 @@ class Interpreter(ic):
         # Aho-Corasick algorithm
         pass
 
+    def __confirm(self):
+        while True:
+            IN = input('y/n ')
+            IN = IN.casefold()
+            if IN == 'y':
+                return True
+            elif IN == 'n':
+                return False
+
 
 if __name__ == '__main__':
-    try:
-        count = json.load(open('count.json'))
-    except:
-        count = {}
-    try:
-        count['interpreter'] += 1
-    except:
-        count['interpreter'] = 1
-    json.dump(count, open('count.json', 'w'))
     PHYCO = Interpreter()
     PHYCO.interact('PhycoE v0.0.0 ')
