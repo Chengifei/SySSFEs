@@ -1,7 +1,7 @@
 """Physics Simulator by Euler Method"""
 from itertools import combinations
-from math import isclose, fsum, ceil, log10
 from linalg import vector
+from math import isclose, fsum
 from geom import segment
 from pdb import set_trace
 import mechanics
@@ -14,11 +14,10 @@ class event():
 class sim():
 
     outputtable = str.maketrans('', '', "'{}")
-    heuristiclist = [i for i in range(2, 21, 2)]
+    heuristiclist = [i for i in range(2, 11)]
 
     def __init__(self, objs, name=None, step=10 ** -1, field=None,
-                 const=None, tol=10 ** -3):
-        """:rtype None"""
+                 const=None, tol=10 ** -2):
         # name should be aligned to be compatible with objs
         self.objs = objs
         self.field = field
@@ -33,32 +32,28 @@ class sim():
 
     def start(self, end):
         '''sim.start(end) -> None'''
-        # self.i = 0
-        self.t = 0
-        # n = int(end / self.step)  # number of steps needed
-        self.x = [(0, dict(zip(self.objs, [obj.pos for obj in self.objs])))]
-        self.v = [(0, dict(zip(self.objs, [obj.velocity for obj in self.objs])))]
+        self.i = 0
+        n = int(end / self.step)  # number of steps needed
+        self.x = [dict(zip(self.objs, [obj.pos for obj in self.objs]))]
+        self.v = [dict(zip(self.objs, [obj.velocity for obj in self.objs]))]
 
-        # while self.i < n:
-        while self.t < end:
-            set_trace()
-            self.t += self.__step
+        while self.i < n:
             x, v = self.compute()
             det = self.check(x, v)
             if det == 1:
-                self.x.append((self.t, x))
-                self.v.append((self.t, v))
+                self.x.append(x)
+                self.v.append(v)
             elif det == 0:
                 self.cflag = True
                 if not self.heuristic():
                     self.heuabort = True
-                # self.i -= 1
+                self.i -= 1
             else:
                 self.cflag, self.heuabort = False, False
                 self.__step = self.step
-                self.x.append((self.t, x))
-                self.v.append((self.t, det))
-            # self.i+=1
+                self.x.append(x)
+                self.v.append(det)
+            self.i += 1
 
     def check(self, x, v):
         # check constraints
@@ -81,7 +76,7 @@ class sim():
         return True
 
     def compute(self):
-        x, v = self.x[-1][1].copy(), self.v[-1][1].copy()
+        x, v = self.x[-1].copy(), self.v[-1].copy()
         for Obj in self.objs:
             # F = Obj.getforce(self.objs[1])  # compute resultant force
             F = vector(0, -10)
@@ -92,21 +87,18 @@ class sim():
         return x, v
 
     def heuristic(self):
-        self.t -= self.__step
         if self.heuristiclist:
             self.__step = self.step / self.heuristiclist.pop(0)
-            self.t += self.__step
             return True
         self.heuristiclist = sim.heuristiclist
         return False
 
     def __str__(self):
         output = {}
-        print(self.x)
         for obj in self.objs:
             output[obj] = [_f[obj] for _f in self.x]
-        X = str(output).replace("], [", ']\n[').replace(']], ', ']]\n')
-        # X = X.translate(sim.outputtable)
+        X = str(output).replace("}, {", '\n')
+        X = X.translate(sim.outputtable)
         return X + '\n'
 
 

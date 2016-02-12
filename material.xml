@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<material>
+    <name>Iron</name>
+    <density>7.9</density>
+    <youngsModulus>190</youngsModulus>
+    <poissonsRatio>0.25</poissonsRatio>
+</material>
