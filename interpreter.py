@@ -28,7 +28,7 @@ class Interpreter(ic):
         self.assigned = {}
         self.params = set()
         self.pool = []
-        ic.push(self, 'import mechanics, sim;from linalg import vector,field')
+        ic.push(self, 'import mechanics, sim;from phycomath.linalg import vector,field')
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -88,7 +88,7 @@ class Interpreter(ic):
             warn('Invalid name')
         if name in self.assigned:
             warn("You're about to replacing the old '{}'".format(name))
-            if not self._confirm():
+            if not self.__confirm():
                 return ''
         if Type in self.moduledict:
             A = '{name}={module}.{type}({arg})'
@@ -168,7 +168,7 @@ class Interpreter(ic):
         '''
         A = 'del '
         for i in line:
-            self.assigned.remove(i)
+            del self.assigned[i]
             A += i + ','
         return A
 

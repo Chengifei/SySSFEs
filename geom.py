@@ -1,9 +1,11 @@
-import linalg
+from phycomath import linalg
 from math import sqrt
 import error
 
+
 class geom():
     pass
+
 
 class line(geom):
 
@@ -71,6 +73,7 @@ class line(geom):
         raise error.UnderConstruction
         return linalg.vector()
 
+
 class segment(line):
 
     def __init__(self, p1, p2):
@@ -119,6 +122,7 @@ class segment(line):
     def __repr__(self):
         return str([str(self.endpoint1), str(self.endpoint2)])
 
+
 class polygon(geom):
 
     def __init__(self, *args):
@@ -141,11 +145,13 @@ class polygon(geom):
     def __chebCenter(self):
         pass
 
+
 class circle(geom):
 
     def __init__(self, center=linalg.vector(), radius=None):
         self.center = center
         self.radius = radius
+
 
 class funcCurve(geom):
 

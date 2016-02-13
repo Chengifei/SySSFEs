@@ -1,7 +1,7 @@
 """Physics Simulator by Euler Method"""
 from itertools import combinations
 from math import isclose, fsum, ceil, log10
-from linalg import vector
+from phycomath.linalg import vector
 from geom import segment
 from pdb import set_trace
 import mechanics
@@ -41,7 +41,6 @@ class sim():
 
         # while self.i < n:
         while self.t < end:
-            set_trace()
             self.t += self.__step
             x, v = self.compute()
             det = self.check(x, v)

@@ -1,0 +1,252 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Get Into Phyco &mdash; Phyco 0.1-pre-alpha documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
+        <link rel="next" title="Commands / Verbs Usage" href="commands.html"/>
+        <link rel="prev" title="Installation" href="installation.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Phyco
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Get Into Phyco</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-phyco">What is Phyco?</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#something-to-know-about-phyco">Something to know about Phyco~</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#phyco-structure">Phyco Structure</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#types-in-phyco">Types in Phyco</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Phyco</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+      
+    <li>Get Into Phyco</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="get-into-phyco">
+<h1>Get Into Phyco<a class="headerlink" href="#get-into-phyco" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="what-is-phyco">
+<h2>What is Phyco?<a class="headerlink" href="#what-is-phyco" title="Permalink to this headline">¶</a></h2>
+<p>Phyco is a developing physics engine implemented mainly in Python 3. For now, it supports to 3-D multi mass point simulation in various types of force field. Collision detectection is finished and tested somehow, but supports only 2-body collision. Further developing is in progress.</p>
+<p>Though Phyco are to be a physics engine, it supports not only physics manipulations, that is, building it calls not only for physics formulas and programming skills. Phyco also integrated a fairly adequate math processor, with capability to:</p>
+<ul class="simple">
+<li>Process symbolic math expressions;</li>
+<li>Do vector manipulations;</li>
+<li>Do some operation such as compute determinant of matrices;</li>
+<li>Do differentiation to elementary functions.</li>
+</ul>
+<p>Alongside with math, Phyco do pattern match by Aho-Corasick Algorithm, in both expression handling and aliasing feature.</p>
+</div>
+<div class="section" id="something-to-know-about-phyco">
+<h2>Something to know about Phyco~<a class="headerlink" href="#something-to-know-about-phyco" title="Permalink to this headline">¶</a></h2>
+<p>Phyco is originally written in Python 3.4 and diverted to 3.5, and is reforming to integrate C++ extensions for better performance.</p>
+<p>Written in Python, Phyco inherits Python PEP 20 and some other spirits and mottos of Python, and is highly Object-Oriented. Besides, Phyco takes flexiblity as the first. Using Phyco do not require
+knowledge in programming (Ugh, little maybe), but there&#8217;s a few conventions or terms used in this document that would be confusing if without Python background.</p>
+<ul class="simple">
+<li>Anything you will see in Phyco can be generally called as <em>Object</em> without specifying its type.</li>
+<li><cite>class</cite> as a qualifier can be thought as a category of objects or a type of objects.</li>
+<li>All <cite>self</cite> in documents refers the object itself.</li>
+</ul>
+</div>
+<div class="section" id="phyco-structure">
+<h2>Phyco Structure<a class="headerlink" href="#phyco-structure" title="Permalink to this headline">¶</a></h2>
+<p>The top level of Phyco (User Interface, UI) is command line (shell), which you use to send command. A valid Phyco command can have only one verb which is at the beginning of the command. Knowing this is enough for using Phyco, but you&#8217;re welcomed to be curious about what will be done inside Phyco. (You&#8217;re recommended to try using Phyco before seeing the following.)</p>
+<p>Every input of yours are firstly translated to python code. (This is not so good though.) Any Object you created are stored in a <cite>dict</cite>. You may have tried to either set a property of an object or create an object with a property embeded in initially. This is achieved by setting attributes of your object.</p>
+<p>As you start a <cite>sim</cite>, a lot of things are done, and this might be the core of Phyco. <cite>pass</cite>!</p>
+</div>
+<div class="section" id="types-in-phyco">
+<h2>Types in Phyco<a class="headerlink" href="#types-in-phyco" title="Permalink to this headline">¶</a></h2>
+<p>Types is something fundamental in Phyco. Everything encountered should have a type. It seems awkward for new comers that a few words like <cite>type</cite>, <cite>class</cite> or <cite>object</cite> are introduced. But you just feel free to use it just in everyday you do. In Phyco, here&#8217;s a few types of modules, namely:</p>
+<ul class="simple">
+<li>Mechanics Types: object, constraint</li>
+<li>Sim Types: simulation, event</li>
+<li>LinAlg Types: vector, matrix, field</li>
+<li>Geom Types: <em>Under Construction</em></li>
+<li>... (more in Phyco but you won&#8217;t meet them so soon)</li>
+</ul>
+<p>But it&#8217;s never necessary for you to remember which specific type belongs to which module, it&#8217;s auto completed in Phyco anytime once needed. You can also find specific help doc to know them better.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="commands.html" class="btn btn-neutral float-right" title="Commands / Verbs Usage" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="installation.html" class="btn btn-neutral" title="Installation" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015-2016, Yifei Zheng.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.1-pre-alpha',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

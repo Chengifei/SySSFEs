@@ -1,6 +1,7 @@
 '''This is a PhycoE module deal with dynamics.
 For now, it supports ,specifically, collision detection and 2-D dynamics.'''
-import linalg, geom
+from phycomath import linalg
+import geom
 from __init__ import G, epsilon0
 from math import pi
 from error import UnderConstruction

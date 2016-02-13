@@ -194,42 +194,29 @@ class matrix():
         A = self.transpose()
         return '\n'.join([str(col).lstrip('[').rstrip(']') for col in A])
 
-class eqn():
-
-    def __init__(self, eqn, params=None):
-        self.eqn = eqn
-        self.params = params
-
-    def solve(self):  # solve by newton's nethod
-        pass
-
-    def __str__(self):
-        return str(self.eqn)
 
 class operator():
-
-    def __init__(self):
-        pass
 
     def __call__(self, expr):
         pass
 
+
 class field():
 
-    __slots__ = ('arglist', 'x', 'y', 'z')
+    __slots__ = ('params', 'x', 'y', 'z')
 
-    def __init__(self, x=0, y=0, z=0, *arg):
-        self.x = compile(str(x), '<string>', mode='eval')
-        self.y = compile(str(y), '<string>', mode='eval')
-        self.z = compile(str(z), '<string>', mode='eval')
-        self.arglist = arg
+    def __init__(self, x, y, z=None, *paramlist):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.params = paramlist
 
-    def __call__(self, index):
-        x, y, z = index.x, index.y, index.z
-        return vector(eval(self.x), eval(self.y), eval(self.z))
+    def __call__(self, vector):
+        _values = vector.list()
+        return vector(self.x[_values], self.y[_values], self.z[_values])
 
-    def __add(self, other):
-        return field(eval(self.x) + eval(self.y))
+    def __add__(self, other):
+        return field(self.x + other.x, self.y + other.y, self.z + other.z)
 
     def curl(self, pos):
         return
@@ -239,7 +226,3 @@ class field():
 
     def div(self, pos):
         return
-
-diff = operator()
-pdiff = operator()
-int = operator()

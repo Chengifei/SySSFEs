@@ -1,0 +1,287 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Commands / Verbs Usage &mdash; Phyco 0.1-pre-alpha documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
+        <link rel="next" title="Math Manipulation in Phyco" href="math.html"/>
+        <link rel="prev" title="Get Into Phyco" href="getintophyco.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Phyco
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="getintophyco.html">Get Into Phyco</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Commands / Verbs Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#create">create</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#set">set</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#start">start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#print">print</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#list">list</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#alias">alias</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#delete">delete</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#help">help</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">Phyco</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+      
+    <li>Commands / Verbs Usage</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="commands-verbs-usage">
+<h1>Commands / Verbs Usage<a class="headerlink" href="#commands-verbs-usage" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="create">
+<h2>create<a class="headerlink" href="#create" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;create&quot; type name [attribeqn]</code></dt>
+<dd><p>Create <code class="docutils literal"><span class="pre">type</span></code> object with name <code class="docutils literal"><span class="pre">name</span></code> and <code class="docutils literal"><span class="pre">attribeqn</span></code> initially embeded in it.</p>
+<p>All the commands input after name will be directly passed to <code class="docutils literal"><span class="pre">__init__()</span></code> of their own classes. User should strictly obey the grammar of their constructors. Refer to specific help if needed.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="set">
+<h2>set<a class="headerlink" href="#set" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;set&quot; name (attrib&quot;=&quot;value)+</code></dt>
+<dd><p>Set <code class="docutils literal"><span class="pre">name</span></code>&#8216;s <code class="docutils literal"><span class="pre">attrib</span></code> as <code class="docutils literal"><span class="pre">value</span></code>. It can handle multiple assignment.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="start">
+<h2>start<a class="headerlink" href="#start" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;start&quot; simname endtime</code></dt>
+<dd><p>This is a specialize command to start a simulation <code class="docutils literal"><span class="pre">simname</span></code> lasting for <code class="docutils literal"><span class="pre">endtime</span></code> in sec.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="print">
+<h2>print<a class="headerlink" href="#print" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;print&quot; name (attribname)*</code></dt>
+<dd><p>Print <code class="docutils literal"><span class="pre">name</span></code>&#8216;s attribute <code class="docutils literal"><span class="pre">attribname</span></code>. You can give multiple <code class="docutils literal"><span class="pre">attribname</span></code> separated by space.</p>
+</dd></dl>
+
+</div>
+<div class="section" id="list">
+<h2>list<a class="headerlink" href="#list" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;list&quot; [typename]</code></dt>
+<dd></dd></dl>
+
+<p>Return the roster of a specific type <code class="docutils literal"><span class="pre">typename</span></code> or all types without <code class="docutils literal"><span class="pre">typename</span></code>.</p>
+</div>
+<div class="section" id="alias">
+<h2>alias<a class="headerlink" href="#alias" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;alias&quot; (aliaseqn)+</code></dt>
+<dd></dd></dl>
+
+</div>
+<div class="section" id="delete">
+<h2>delete<a class="headerlink" href="#delete" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;del&quot;|&quot;d&quot;|&quot;delete&quot; (objname)+</code></dt>
+<dd></dd></dl>
+
+<p>Delete one or multiple objects</p>
+</div>
+<div class="section" id="help">
+<h2>help<a class="headerlink" href="#help" title="Permalink to this headline">¶</a></h2>
+<dl class="object">
+<dt>
+<code class="descname">&quot;help&quot; commname</code></dt>
+<dd></dd></dl>
+
+<p>Return help info of above commands.</p>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="math.html" class="btn btn-neutral float-right" title="Math Manipulation in Phyco" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="getintophyco.html" class="btn btn-neutral" title="Get Into Phyco" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2015-2016, Yifei Zheng.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.1-pre-alpha',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

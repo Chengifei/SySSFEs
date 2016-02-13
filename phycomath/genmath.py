@@ -1,35 +1,34 @@
-'''
-Created on Feb 10, 2016
+"""Generic Math Processing
+"""
 
-@author: yfzheng
-'''
-"""
-Generic Math Processing
-"""
+import AhoCorasick
+
+
 class expr():
     """
-    :class: expr
-    A unique container (data structure to be
-    written in C++) for math expression.
+    A unique container (data structure to be written in
+    C++) for math expression.
+    Supports four elementary arithmetic operations and
+    trigonometric and hyperbolic functions.
 
     """
 
     predeffunc = {'sin', 'cos', 'tan',
                   'csc', 'sec', 'cot',
-                  'sinh', 'cosh', 'tanh'}
+                  'sinh', 'cosh', 'tanh',
+                  'exp', 'ln'}
+    _keywords = {'+', '-', '*', '/', '(', ')'} | predeffunc
+    # ACtrie = AhoCorasick.ACtrie(_keywords)
 
-    def __init__(self, str):
-        self.str = str
+    def __init__(self, _str, params=None):
+        self.str = _str
         self.pos = 0
         self.expr = None
+        self.params = params
 
     def preprocess(self):
-
-        _expr = {}
-        curlevel = 0
-        for i in str:
-            pass
-        self.expr = _expr
+        # self.expr = expr.ACtrie.process(self.str)
+        pass
 
     def __call__(self, valuelist):
         return
@@ -43,3 +42,15 @@ class expr():
 
     def __repr__(self):
         return str(self.expr)
+
+
+class eqn():
+
+    def __init__(self, _str, values=None, params=None):
+        self.l, self.r = _str.split('=')
+        self.l = expr(self.l, params)
+        self.r = expr(self.r, params)
+        self.values = values
+
+    def __bool__(self):
+        return self.l(self.values) == self.r(self.values)
