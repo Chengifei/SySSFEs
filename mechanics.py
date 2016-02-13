@@ -1,4 +1,4 @@
-'''This is a PhycoE module deal with dynamics.
+'''This is a Phyco module deal with dynamics.
 For now, it supports ,specifically, collision detection and 2-D dynamics.'''
 from phycomath import linalg
 import geom

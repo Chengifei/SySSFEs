@@ -18,7 +18,7 @@ class expr():
                   'sinh', 'cosh', 'tanh',
                   'exp', 'ln'}
     _keywords = {'+', '-', '*', '/', '(', ')'} | predeffunc
-    # ACtrie = AhoCorasick.ACtrie(_keywords)
+    ACtrie = AhoCorasick.ACtrie(_keywords)
 
     def __init__(self, _str, params=None):
         self.str = _str
@@ -27,8 +27,7 @@ class expr():
         self.params = params
 
     def preprocess(self):
-        # self.expr = expr.ACtrie.process(self.str)
-        pass
+        self.expr = expr.ACtrie.process(self.str)
 
     def __call__(self, valuelist):
         return

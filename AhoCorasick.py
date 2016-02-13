@@ -4,7 +4,6 @@ This is used both in phycomath.genmath.expr and
 integrated interpreter for aliasing.
 
 """
-from pdb import set_trace
 
 
 class ACtrie():
@@ -25,13 +24,15 @@ class ACtrie():
         # self.linkDict()  # link all parallel match
 
     def add(self, _str):  # WARNING:danger of without setting self.max/minlen
+        # REDUNDANT CODE
         self.record[_str] = 0  # initialize self.record
         if len(_str) == 1:
-            parent = self.root
-            _node = ACnode(_str[0], parent, True, corrStr=_str)
-            _node.link(self.root)
-            self.links.add((_node, 'ROOT'))
-            self.nodesByLevel[1][_node.repr].add(_node)
+            _node = ACnode(_str[0], self.root, True, corrStr=_str)
+            _existed = self.nodesByLevel[1]
+            if _node.repr not in _existed:
+                self.nodesByLevel[1][_node.repr] = _node
+                _node.link(self.root)
+                self.links.add((_node, 'ROOT'))
         else:
             parent = self.root
             _node = ACnode(_str[0], parent)
@@ -41,9 +42,12 @@ class ACtrie():
             parent = _node
             for i in _str[1:-1]:
                 _node = ACnode(i, parent)
-                if _node.repr not in self.nodesByLevel[parent.level + 1]:
+                _existed = self.nodesByLevel[parent.level + 1]
+                if _node.repr not in _existed:
                     self.nodesByLevel[parent.level + 1][_node.repr] = _node
-                parent = _node
+                    parent = _node
+                else:
+                    parent = _existed[_node.repr]
             _node = ACnode(_str[-1], parent, True, corrStr=_str)
             self.nodesByLevel[parent.level + 1][_node.repr] = _node
         # Heretofore, all parent-child, ROOT-first suffix relations linked
@@ -51,7 +55,6 @@ class ACtrie():
     def linkSuffix(self):  # suffix linker
         for node in self.nodes:
             _node = node.parent.suffix
-            set_trace()
             while not node.suffix:
                 _target = _node.charInChildren(node.char)
                 if _target:
@@ -62,6 +65,9 @@ class ACtrie():
                     node.link(self.root)
                     self.links.add((node, 'ROOT'))
                 _node = _node.suffix
+
+    def newNode(self, repr):
+        pass
 
     def linkDict(self):  # dictionary suffix linker
         for node in self.nodes:
@@ -143,6 +149,6 @@ class ACnode():
         return hash(self.repr)
 
 if __name__ == '__main__':
-    # struct = ACtrie({'ab', 'bca'})
+    struct = ACtrie({'ab', 'bca'})
     struct = ACtrie({'cot', 'cos', 'cosh'})
     print(struct.links)
