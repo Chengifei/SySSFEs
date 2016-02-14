@@ -31,8 +31,8 @@
 
   
     <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
-        <link rel="next" title="Physics in Phyco (Tutorial)" href="physicsinphyco.html"/>
-        <link rel="prev" title="Math Manipulation in Phyco" href="math.html"/> 
+        <link rel="next" title="Math Manipulation in Phyco" href="math.html"/>
+        <link rel="prev" title="Commands / Verbs Usage" href="commands.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -84,10 +84,11 @@
                 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getintophyco.html">Get Into Phyco</a></li>
-<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">On Specific Class</a></li>
 <li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">On Specific Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="terms.html">Terms and special syntaxes</a></li>
 </ul>
 
             
@@ -130,13 +131,62 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="module-mechanics">
-<span id="on-specific-class"></span><h1>On Specific Class<a class="headerlink" href="#module-mechanics" title="Permalink to this headline">¶</a></h1>
-<dl class="class">
+  <div class="section" id="on-specific-class">
+<h1>On Specific Class<a class="headerlink" href="#on-specific-class" title="Permalink to this headline">¶</a></h1>
+<p><em>You can see very self-explanatory syntaxes in classes. For those explicit names, explanations are omitted.</em></p>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p class="last">For any keyword arguments <code class="docutils literal"><span class="pre">name</span></code>, you don&#8217;t have to explicit name it.</p>
+</div>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p class="last">As you&#8217;re required to give assignment equations, you don&#8217;t have to put them in order.</p>
+</div>
+<span class="target" id="module-mechanics"></span><dl class="class">
 <dt id="mechanics.obj">
 <em class="property">class </em><code class="descclassname">mechanics.</code><code class="descname">obj</code><span class="sig-paren">(</span><em>name=None</em>, <em>mass=1</em>, <em>initPos=vector()</em>, <em>point=True</em>, <em>mode='rigid'</em>, <em>charge=False</em>, <em>initv=vector()</em>, <em>material=None</em><span class="sig-paren">)</span><a class="headerlink" href="#mechanics.obj" title="Permalink to this definition">¶</a></dt>
-<dd><p><em>You&#8217;ve seen a rather complex but very self-explanatory syntax in obj.</em></p>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>mass</strong> (<em>float</em>) &#8211; </li>
+<li><strong>initPos</strong> (<a class="reference internal" href="math.html#phycomath.linalg.vector" title="phycomath.linalg.vector"><em>vector</em></a>) &#8211; </li>
+<li><strong>point</strong> (<em>bool</em>) &#8211; is it a mass point?</li>
+<li><strong>mode</strong> (<em>str</em>) &#8211; determine how will Phyco process it in a <code class="docutils literal"><span class="pre">sim</span></code></li>
+<li><strong>charge</strong> (<em>float</em>) &#8211; </li>
+<li><strong>initv</strong> (<a class="reference internal" href="math.html#phycomath.linalg.vector" title="phycomath.linalg.vector"><em>vector</em></a>) &#8211; </li>
+<li><strong>material</strong> (<em>material</em>) &#8211; <em>Under Construction</em></li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
 </dd></dl>
+
+<span class="target" id="module-sim"></span><dl class="class">
+<dt id="sim.sim">
+<em class="property">class </em><code class="descclassname">sim.</code><code class="descname">sim</code><span class="sig-paren">(</span><em>objs</em>, <em>name=None</em>, <em>step=10 ** -2</em>, <em>field=None</em>, <em>const=None</em>, <em>tol=10 ** -3</em><span class="sig-paren">)</span><a class="headerlink" href="#sim.sim" title="Permalink to this definition">¶</a></dt>
+<dd><table class="docutils field-list" frame="void" rules="none">
+<col class="field-name" />
+<col class="field-body" />
+<tbody valign="top">
+<tr class="field-odd field"><th class="field-name">Parameters:</th><td class="field-body"><ul class="first last simple">
+<li><strong>step</strong> (<em>float</em>) &#8211; </li>
+<li><strong>field</strong> (<em>iterable</em>) &#8211; field definitions <code class="docutils literal"><span class="pre">field</span></code> in iterable</li>
+<li><strong>const</strong> (<em>iterable</em>) &#8211; constraint <code class="docutils literal"><span class="pre">eqn</span></code> s in iterable</li>
+<li><strong>tol</strong> (<em>float</em>) &#8211; collision detection tolerance</li>
+</ul>
+</td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="sim.event">
+<em class="property">class </em><code class="descclassname">sim.</code><code class="descname">event</code><span class="sig-paren">(</span><em>name=None</em>, <em>obj</em>, <em>*arg</em><span class="sig-paren">)</span><a class="headerlink" href="#sim.event" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
 
 </div>
 
@@ -147,10 +197,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="physicsinphyco.html" class="btn btn-neutral float-right" title="Physics in Phyco (Tutorial)" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="math.html" class="btn btn-neutral float-right" title="Math Manipulation in Phyco" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="math.html" class="btn btn-neutral" title="Math Manipulation in Phyco" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="commands.html" class="btn btn-neutral" title="Commands / Verbs Usage" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -190,6 +240,7 @@
       <script type="text/javascript" src="_static/jquery.js"></script>
       <script type="text/javascript" src="_static/underscore.js"></script>
       <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
   
 

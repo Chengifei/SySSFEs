@@ -31,8 +31,8 @@
 
   
     <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
-        <link rel="next" title="Math Manipulation in Phyco" href="math.html"/>
-        <link rel="prev" title="Get Into Phyco" href="getintophyco.html"/> 
+        <link rel="next" title="On Specific Class" href="onspecificclass.html"/>
+        <link rel="prev" title="Physics in Phyco (Tutorial)" href="physicsinphyco.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -84,6 +84,7 @@
                 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getintophyco.html">Get Into Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">Commands / Verbs Usage</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#create">create</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#set">set</a></li>
@@ -95,9 +96,9 @@
 <li class="toctree-l2"><a class="reference internal" href="#help">help</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
 <li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="terms.html">Terms and special syntaxes</a></li>
 </ul>
 
             
@@ -146,9 +147,13 @@
 <h2>create<a class="headerlink" href="#create" title="Permalink to this headline">¶</a></h2>
 <dl class="object">
 <dt>
-<code class="descname">&quot;create&quot; type name [attribeqn]</code></dt>
+<code class="descname">&quot;create&quot; type name [attribeqn : attrib&quot;=&quot;value]</code></dt>
 <dd><p>Create <code class="docutils literal"><span class="pre">type</span></code> object with name <code class="docutils literal"><span class="pre">name</span></code> and <code class="docutils literal"><span class="pre">attribeqn</span></code> initially embeded in it.</p>
-<p>All the commands input after name will be directly passed to <code class="docutils literal"><span class="pre">__init__()</span></code> of their own classes. User should strictly obey the grammar of their constructors. Refer to specific help if needed.</p>
+<div class="admonition caution">
+<p class="first admonition-title">Caution</p>
+<p class="last">Name your objects carefully. You&#8217;re strongly unrecommended to name it as &#8220;sin&#8221; or &#8220;d&#8221; which are predefined.</p>
+</div>
+<p>All the commands input after name will be directly passed to <code class="docutils literal"><span class="pre">__init__()</span></code> of their own classes. User should strictly obey the grammar of their constructors. Refer to <a class="reference external" href="./onspecificclass.html">specific help</a> if needed.</p>
 </dd></dl>
 
 </div>
@@ -156,7 +161,7 @@
 <h2>set<a class="headerlink" href="#set" title="Permalink to this headline">¶</a></h2>
 <dl class="object">
 <dt>
-<code class="descname">&quot;set&quot; name (attrib&quot;=&quot;value)+</code></dt>
+<code class="descname">&quot;set&quot; name (attribeqn : attrib&quot;=&quot;value)+</code></dt>
 <dd><p>Set <code class="docutils literal"><span class="pre">name</span></code>&#8216;s <code class="docutils literal"><span class="pre">attrib</span></code> as <code class="docutils literal"><span class="pre">value</span></code>. It can handle multiple assignment.</p>
 </dd></dl>
 
@@ -223,10 +228,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="math.html" class="btn btn-neutral float-right" title="Math Manipulation in Phyco" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="onspecificclass.html" class="btn btn-neutral float-right" title="On Specific Class" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="getintophyco.html" class="btn btn-neutral" title="Get Into Phyco" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="physicsinphyco.html" class="btn btn-neutral" title="Physics in Phyco (Tutorial)" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -266,6 +271,7 @@
       <script type="text/javascript" src="_static/jquery.js"></script>
       <script type="text/javascript" src="_static/underscore.js"></script>
       <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
   
 

@@ -31,7 +31,8 @@
 
   
     <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
-        <link rel="prev" title="On Specific Class" href="onspecificclass.html"/> 
+        <link rel="next" title="Commands / Verbs Usage" href="commands.html"/>
+        <link rel="prev" title="Get Into Phyco" href="getintophyco.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -83,10 +84,11 @@
                 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getintophyco.html">Get Into Phyco</a></li>
-<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
-<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
-<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">Physics in Phyco (Tutorial)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="terms.html">Terms and special syntaxes</a></li>
 </ul>
 
             
@@ -132,14 +134,22 @@
   <div class="section" id="physics-in-phyco-tutorial">
 <h1>Physics in Phyco (Tutorial)<a class="headerlink" href="#physics-in-phyco-tutorial" title="Permalink to this headline">¶</a></h1>
 <p>Currently Phyco development is focused on dynamics and is able to offer a flexible physics simulation now. But there&#8217;s still a few thing you need to know in advance.</p>
-<p>To start a simulation you need to create a <cite>sim</cite>, for example: <cite>create sim s</cite>. But this simply won&#8217;t work because creating sim requires at least one <cite>obj</cite> (this is the object in physics).</p>
-<p>So the right way to start your simulation is to firstly create your object then simulation.</p>
+<p>To start a simulation you need to create a <code class="docutils literal"><span class="pre">sim</span></code>, for example: <code class="docutils literal"><span class="pre">create</span> <span class="pre">sim</span> <span class="pre">s</span></code>. But this simply won&#8217;t work because creating sim requires at least one <code class="docutils literal"><span class="pre">obj</span></code> (this is the real object in physics).</p>
+<p>So the right way to start your simulation is to firstly create your object then simulation</p>
 <div class="highlight-phyco"><div class="highlight"><pre><span class="nb">create </span><span class="k">obj </span>a
 <span class="nb">create </span><span class="k">sim </span>s [a]
 <span class="nb">start </span>s 1
 </pre></div>
 </div>
 <p>For your convinience, Phyco can automatically separate statements by semicolon. The above code is equivalent to <code class="docutils literal"><span class="pre">create</span> <span class="pre">obj</span> <span class="pre">a;create</span> <span class="pre">sim</span> <span class="pre">s</span> <span class="pre">[a];start</span> <span class="pre">s</span> <span class="pre">1</span></code>.</p>
+<p>The above code runs without exceptions, but returns you lots of zeroes. Let&#8217;s just dive into what actually it does.</p>
+<p><code class="docutils literal"><span class="pre">create</span> <span class="pre">obj</span> <span class="pre">a</span></code> creates an object called &#8220;a&#8221;. This is the minimum format of <code class="docutils literal"><span class="pre">create</span></code>, since no parameter is provided. Then you may wonder if &#8220;a&#8221; has mass. Sure it has, unless you append <code class="docutils literal"><span class="pre">mass=0</span></code> (though it may cause problems later). Why? There&#8217;s default values given in <a class="reference external" href="./onspecificclass.html">On Specific Class</a>, and that gives <code class="docutils literal"><span class="pre">mass=1</span></code>. You may also get why it doesn&#8217;t move.</p>
+<p>The next command constructs a <code class="docutils literal"><span class="pre">sim</span></code> called &#8220;s&#8221; with objects <code class="docutils literal"><span class="pre">[a]</span></code> which you&#8217;ve just created. You&#8217;re supposed to know that every sim must consists at least one object and objects must be in list (that is,  be contained in a pair of brackets <code class="docutils literal"><span class="pre">[]</span></code>).</p>
+<p>The last line starts the <code class="docutils literal"><span class="pre">sim</span></code> called &#8220;s&#8221;. As physics supposed, nothing moves, and Phyco gives you a lot of 0.</p>
+<p>Anyway, moving objects is what makes a Physics Engine solid and easily you can make your things move.
+There&#8217;re several ways to make them move. Physically, you can move a object if you give it force, of any type, if at rest:</p>
+<p><code class="docutils literal"><span class="pre">create</span> <span class="pre">sim</span> <span class="pre">s</span> <span class="pre">[a]</span> <span class="pre">field={field(*[0,-g,0])}</span></code>.</p>
+<p>This indeed looks complex, but really not that much. Let&#8217;s examine it part by part. The first few words <code class="docutils literal"><span class="pre">create</span> <span class="pre">sim</span> <span class="pre">s</span> <span class="pre">[a]</span></code> is exactly same as before, which construct a <code class="docutils literal"><span class="pre">sim</span></code> for you. The next block you have an parameter passed to <code class="docutils literal"><span class="pre">create</span></code> called <code class="docutils literal"><span class="pre">field</span></code> defined.</p>
 </div>
 
 
@@ -149,8 +159,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
+        <a href="commands.html" class="btn btn-neutral float-right" title="Commands / Verbs Usage" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
-        <a href="onspecificclass.html" class="btn btn-neutral" title="On Specific Class" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+        <a href="getintophyco.html" class="btn btn-neutral" title="Get Into Phyco" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -190,6 +202,7 @@
       <script type="text/javascript" src="_static/jquery.js"></script>
       <script type="text/javascript" src="_static/underscore.js"></script>
       <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
   
 

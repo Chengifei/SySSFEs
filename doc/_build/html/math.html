@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Math Manipulation in Phyco &mdash; Phyco 0.1-pre-alpha documentation</title>
+  <title>Math manipulations in Phyco &mdash; Phyco 0.1-pre-alpha documentation</title>
   
 
   
@@ -31,8 +31,8 @@
 
   
     <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
-        <link rel="next" title="On Specific Class" href="onspecificclass.html"/>
-        <link rel="prev" title="Commands / Verbs Usage" href="commands.html"/> 
+        <link rel="next" title="Terms and special syntaxes" href="terms.html"/>
+        <link rel="prev" title="On Specific Class" href="onspecificclass.html"/> 
 
   
   <script src="_static/js/modernizr.min.js"></script>
@@ -84,14 +84,15 @@
                 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="getintophyco.html">Get Into Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
-<li class="toctree-l1 current"><a class="current reference internal" href="">Math Manipulation in Phyco</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#generic-math-processing">Generic Math Processing</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#linear-algebra-related">Linear Algebra &amp; related</a></li>
+<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="">Math manipulations in Phyco</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-phycomath.genmath">Generic Math Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-phycomath.linalg">Linear Algebra &amp; related</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="onspecificclass.html">On Specific Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="terms.html">Terms and special syntaxes</a></li>
 </ul>
 
             
@@ -122,7 +123,7 @@
   <ul class="wy-breadcrumbs">
     <li><a href="index.html">Docs</a> &raquo;</li>
       
-    <li>Math Manipulation in Phyco</li>
+    <li>Math manipulations in Phyco</li>
       <li class="wy-breadcrumbs-aside">
         
           
@@ -134,86 +135,92 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="math-manipulation-in-phyco">
-<h1>Math Manipulation in Phyco<a class="headerlink" href="#math-manipulation-in-phyco" title="Permalink to this headline">¶</a></h1>
+  <div class="section" id="math-manipulations-in-phyco">
+<h1>Math manipulations in Phyco<a class="headerlink" href="#math-manipulations-in-phyco" title="Permalink to this headline">¶</a></h1>
 <p>As a physics engine, phyco provides considerable math processing ability.</p>
-<div class="section" id="generic-math-processing">
-<h2>Generic Math Processing<a class="headerlink" href="#generic-math-processing" title="Permalink to this headline">¶</a></h2>
-<p><em>Classes below will be implemented or is in development in C++.</em></p>
+<p>There are paragraphs marked in &#8220;For Developers&#8221; in bold face, which are functions you&#8217;re not required to know how to work with it. You&#8217;re mostly likely benefits from just how to define it.</p>
+<div class="section" id="module-phycomath.genmath">
+<span id="generic-math-processing"></span><h2>Generic Math Processing<a class="headerlink" href="#module-phycomath.genmath" title="Permalink to this headline">¶</a></h2>
+<p><em>Classes in this section will be implemented or is in development in C++.</em></p>
 <dl class="class">
-<dt id="expr">
-<em class="property">class </em><code class="descname">expr</code><span class="sig-paren">(</span><em>str</em>, <em>params=None</em><span class="sig-paren">)</span><a class="headerlink" href="#expr" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.genmath.expr">
+<em class="property">class </em><code class="descclassname">phycomath.genmath.</code><code class="descname">expr</code><span class="sig-paren">(</span><em>str</em>, <em>params=None</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.genmath.expr" title="Permalink to this definition">¶</a></dt>
 <dd><dl class="data">
 <dt>
-<code class="descname">predeffunc={'sin', 'cos', 'tan', 'csc', 'sec', 'cot', 'sinh', 'cosh', 'tanh', 'exp', 'ln'}</code></dt>
+<code class="descname">predeffunc={'sin', 'cos', 'tan', 'csc', 'sec', 'cot',</code></dt>
+<dt>
+<code class="descname">'sinh', 'cosh', 'tanh', 'ln'}</code></dt>
 <dd></dd></dl>
 
 <p>A unique container for math expression.
-Supports four elementary arithmetic operations and elementary functions as listed above.</p>
-<p>Define an expression with <code class="docutils literal"><span class="pre">params</span></code> treated as parameters. There&#8217;s no need to declare symbolic variable in phyco, since all letters in the expression are regarded as symbol.</p>
-</dd></dl>
-
-<p>For developers:</p>
-<blockquote>
-<div><dl class="method">
-<dt id="__call__">
-<code class="descname">__call__</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#__call__" title="Permalink to this definition">¶</a></dt>
+Supports elementary arithmetic operations and elementary functions as listed above.</p>
+<p>Define an expression with <code class="docutils literal"><span class="pre">params</span></code> treated as parameters. There&#8217;s no need to declare symbolic variable in Phyco, since all letters in the expression are regarded as symbol except for those in <code class="docutils literal"><span class="pre">predeffunc</span></code>.</p>
+<div class="admonition tip">
+<p class="first admonition-title">Tip</p>
+<p class="last">Only <span class="math">\(ln()\)</span> is supported in series of logarithms, but you can use change of base rule to obtain any.</p>
+</div>
+<p><strong>For Developers:</strong></p>
+<dl class="method">
+<dt id="phycomath.genmath.expr.__call__">
+<code class="descname">__call__</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.genmath.expr.__call__" title="Permalink to this definition">¶</a></dt>
 <dd><p>Call the expression just by <code class="docutils literal"><span class="pre">exprname(valuedict)</span></code> to get result of it evaluated at valuedict.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="latex">
-<code class="descname">latex</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#latex" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.genmath.expr.latex">
+<code class="descname">latex</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.genmath.expr.latex" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return LaTex format expression.</p>
 </dd></dl>
 
-</div></blockquote>
-<dl class="class">
-<dt id="eqn">
-<em class="property">class </em><code class="descname">eqn</code><span class="sig-paren">(</span><em>str</em>, <em>params=None</em><span class="sig-paren">)</span><a class="headerlink" href="#eqn" title="Permalink to this definition">¶</a></dt>
-<dd><p>Type designed for equation.</p>
 </dd></dl>
 
-<p>For developers:</p>
-<blockquote>
-<div><dl class="method">
-<dt id="__bool__">
-<code class="descname">__bool__</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#__bool__" title="Permalink to this definition">¶</a></dt>
+<dl class="class">
+<dt id="phycomath.genmath.eqn">
+<em class="property">class </em><code class="descclassname">phycomath.genmath.</code><code class="descname">eqn</code><span class="sig-paren">(</span><em>str</em>, <em>params=None</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.genmath.eqn" title="Permalink to this definition">¶</a></dt>
+<dd><p>Type designed for equation.</p>
+<p><strong>For Developers:</strong></p>
+<dl class="method">
+<dt id="phycomath.genmath.eqn.equal">
+<code class="descname">equal</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; bool<a class="headerlink" href="#phycomath.genmath.eqn.equal" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return if the equation is true.</p>
 </dd></dl>
 
-</div></blockquote>
+<dl class="method">
+<dt id="phycomath.genmath.eqn.solve">
+<code class="descname">solve</code><span class="sig-paren">(</span><em>paramvalues : dict</em>, <em>initvalue</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.genmath.eqn.solve" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a numeric solution (if any) by newton&#8217;s method.</p>
+</dd></dl>
+
+</dd></dl>
+
 </div>
-<div class="section" id="linear-algebra-related">
-<h2>Linear Algebra &amp; related<a class="headerlink" href="#linear-algebra-related" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="module-phycomath.linalg">
+<span id="linear-algebra-related"></span><h2>Linear Algebra &amp; related<a class="headerlink" href="#module-phycomath.linalg" title="Permalink to this headline">¶</a></h2>
 <dl class="class">
-<dt id="vector">
-<em class="property">class </em><code class="descname">vector</code><span class="sig-paren">(</span><em>a=0</em>, <em>b=0</em>, <em>c=0</em>, <em>mode='rec'</em><span class="sig-paren">)</span><a class="headerlink" href="#vector" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector">
+<em class="property">class </em><code class="descclassname">phycomath.linalg.</code><code class="descname">vector</code><span class="sig-paren">(</span><em>a=0</em>, <em>b=0</em>, <em>c=0</em>, <em>mode='rec'</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.linalg.vector" title="Permalink to this definition">¶</a></dt>
 <dd><div class="admonition note">
 <p class="first admonition-title">Note</p>
 <p class="last">Currently spherical coordinate system isn&#8217;t available</p>
 </div>
-<p>Define a vector with first, second, third parameter as <code class="docutils literal"><span class="pre">a</span></code>, <code class="docutils literal"><span class="pre">b</span></code>, <code class="docutils literal"><span class="pre">c</span></code> in cartesian (rec) cylinder (cyl) or spherical (sph) coordinate system, as in <code class="docutils literal"><span class="pre">mode</span></code>.</p>
+<p>Define a vector with first, second, third parameter as <code class="docutils literal"><span class="pre">a</span></code>, <code class="docutils literal"><span class="pre">b</span></code>, <code class="docutils literal"><span class="pre">c</span></code> in cartesian (rec), cylinder (cyl) or spherical (sph) coordinate system, as in <code class="docutils literal"><span class="pre">mode</span></code>.</p>
+<p><strong>For Developers:</strong></p>
 <p>Use <code class="docutils literal"><span class="pre">*</span></code>, <code class="docutils literal"><span class="pre">+</span></code>, <code class="docutils literal"><span class="pre">-</span></code> to obtain a scalar product, sum and difference, respectively.</p>
-</dd></dl>
-
-<p>For Developers:</p>
-<blockquote>
-<div><dl class="method">
-<dt id="dot">
-<code class="descname">dot</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; scalar<a class="headerlink" href="#dot" title="Permalink to this definition">¶</a></dt>
+<dl class="method">
+<dt id="phycomath.linalg.vector.dot">
+<code class="descname">dot</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; scalar<a class="headerlink" href="#phycomath.linalg.vector.dot" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return inner product of two vectors.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="cross">
-<code class="descname">cross</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#cross" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector.cross">
+<code class="descname">cross</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#phycomath.linalg.vector.cross" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return <code class="docutils literal"><span class="pre">self</span></code> cross <code class="docutils literal"><span class="pre">other</span></code>.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="trans">
-<code class="descname">trans</code><span class="sig-paren">(</span><em>coord='cyl'</em><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#trans" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector.trans">
+<code class="descname">trans</code><span class="sig-paren">(</span><em>coord='cyl'</em><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#phycomath.linalg.vector.trans" title="Permalink to this definition">¶</a></dt>
 <dd><div class="admonition caution">
 <p class="first admonition-title">Caution</p>
 <p class="last">might be deprecated</p>
@@ -222,20 +229,20 @@ Supports four elementary arithmetic operations and elementary functions as liste
 </dd></dl>
 
 <dl class="method">
-<dt id="angle">
-<code class="descname">angle</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; angle<a class="headerlink" href="#angle" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector.angle">
+<code class="descname">angle</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; angle<a class="headerlink" href="#phycomath.linalg.vector.angle" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return the angle between <code class="docutils literal"><span class="pre">self</span></code> and <code class="docutils literal"><span class="pre">other</span></code>.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="unitize">
-<code class="descname">unitize</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#unitize" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector.unitize">
+<code class="descname">unitize</code><span class="sig-paren">(</span><span class="sig-paren">)</span> &rarr; vector<a class="headerlink" href="#phycomath.linalg.vector.unitize" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return unit vector with same direction of <code class="docutils literal"><span class="pre">self</span></code>.</p>
 </dd></dl>
 
 <dl class="method">
-<dt id="isCollinear">
-<code class="descname">isCollinear</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; int<a class="headerlink" href="#isCollinear" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.vector.isCollinear">
+<code class="descname">isCollinear</code><span class="sig-paren">(</span><em>other : vector</em><span class="sig-paren">)</span> &rarr; int<a class="headerlink" href="#phycomath.linalg.vector.isCollinear" title="Permalink to this definition">¶</a></dt>
 <dd><p>Return if two vector are collinear. It has four possible returns.</p>
 <p>Return table:</p>
 <blockquote>
@@ -262,10 +269,18 @@ Supports four elementary arithmetic operations and elementary functions as liste
 </div></blockquote>
 </dd></dl>
 
-</div></blockquote>
+</dd></dl>
+
 <dl class="class">
-<dt id="matrix">
-<em class="property">class </em><code class="descname">matrix</code><span class="sig-paren">(</span><em>data</em>, <em>immutable=False</em><span class="sig-paren">)</span><a class="headerlink" href="#matrix" title="Permalink to this definition">¶</a></dt>
+<dt id="phycomath.linalg.field">
+<em class="property">class </em><code class="descclassname">phycomath.linalg.</code><code class="descname">field</code><span class="sig-paren">(</span><em>x</em>, <em>y</em>, <em>z=''</em>, <em>*paramlist</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.linalg.field" title="Permalink to this definition">¶</a></dt>
+<dd><p>Creates a field with <code class="docutils literal"><span class="pre">x</span></code>, <code class="docutils literal"><span class="pre">y</span></code>, <code class="docutils literal"><span class="pre">z</span></code> specified by user. You can also include parameter in your definition.</p>
+</dd></dl>
+
+<p><strong>For Developers:</strong></p>
+<dl class="class">
+<dt id="phycomath.linalg.matrix">
+<em class="property">class </em><code class="descclassname">phycomath.linalg.</code><code class="descname">matrix</code><span class="sig-paren">(</span><em>data</em>, <em>immutable=False</em><span class="sig-paren">)</span><a class="headerlink" href="#phycomath.linalg.matrix" title="Permalink to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </div>
@@ -278,10 +293,10 @@ Supports four elementary arithmetic operations and elementary functions as liste
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="onspecificclass.html" class="btn btn-neutral float-right" title="On Specific Class" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="terms.html" class="btn btn-neutral float-right" title="Terms and special syntaxes" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="commands.html" class="btn btn-neutral" title="Commands / Verbs Usage" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="onspecificclass.html" class="btn btn-neutral" title="On Specific Class" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
@@ -321,6 +336,7 @@ Supports four elementary arithmetic operations and elementary functions as liste
       <script type="text/javascript" src="_static/jquery.js"></script>
       <script type="text/javascript" src="_static/underscore.js"></script>
       <script type="text/javascript" src="_static/doctools.js"></script>
+      <script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
   
 

@@ -3,13 +3,14 @@ from itertools import combinations
 from math import isclose, fsum, ceil, log10
 from phycomath.linalg import vector
 from geom import segment
-from pdb import set_trace
 import mechanics
+
 
 class event():
 
-    def __init__(self, obj, *arg):
+    def __init__(self, obj, name=None, *arg):
         pass
+
 
 class sim():
 
