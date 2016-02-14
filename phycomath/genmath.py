@@ -1,6 +1,5 @@
 """Generic Math Processing
 """
-
 import AhoCorasick
 
 
@@ -17,14 +16,17 @@ class expr():
                   'csc', 'sec', 'cot',
                   'sinh', 'cosh', 'tanh',
                   'exp', 'ln'}
-    _keywords = {'+', '-', '*', '/', '(', ')'} | predeffunc
-    ACtrie = AhoCorasick.ACtrie(_keywords)
+    predeffunc = {_func + '(' for _func in predeffunc}
+    _tokens = {'+', '-', '*', '/', '(', ')'} | predeffunc
+
+    ACtrie = AhoCorasick.ACtrie(_tokens)
 
     def __init__(self, _str, params=None):
         self.str = _str
         self.pos = 0
         self.expr = None
         self.params = params
+        self.preprocess()
 
     def preprocess(self):
         self.expr = expr.ACtrie.process(self.str)
@@ -53,3 +55,4 @@ class eqn():
 
     def __bool__(self):
         return self.l(self.values) == self.r(self.values)
+

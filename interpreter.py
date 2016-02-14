@@ -11,7 +11,7 @@ For help of specific command refer to themselves.
 import sys
 from code import InteractiveConsole
 from error import *
-
+from AhoCorasick import ACtrie
 
 sys.ps1 = 'Phyco >'
 warn = sys.stderr.write
@@ -27,6 +27,8 @@ class Interpreter(ic):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
+        self.aliastrie = ACtrie({})
+        self.aliasstatus = False
         self.pool = []
         ic.push(self, 'import mechanics, sim;from phycomath.linalg import vector,field')
 
@@ -36,6 +38,8 @@ class Interpreter(ic):
         for line in self.pool:
             try:
                 A = self.__lexer(line)
+                if self.aliasstatus:
+                    A = self._translate(A)
             except:
                 warn('Wrong Syntax:{}\n'.format(str(A)))
                 A = ''
@@ -158,6 +162,9 @@ class Interpreter(ic):
         return ''
 
     def _alias(self, line):
+        for _eqn in line:
+            self.aliastrie.add(_eqn)
+        self.aliasstatus = True
         return ''
 
     def _delete(self, line):
@@ -175,6 +182,9 @@ class Interpreter(ic):
     def _help(self, line):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
+
+    def _translate(self, line):
+        pass
 
     def __confirm(self):
         while True:
