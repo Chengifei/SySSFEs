@@ -5,7 +5,6 @@ integrated interpreter for aliasing.
 
 """
 # NEVER ACCESS CHILDREN IN ATTRIBUTE
-# from collections import Counter
 
 
 class ACtrie():
@@ -104,6 +103,7 @@ class ACtrie():
                 curNode = _node
                 pos += 1
             elif curNode.suffix:  # curNode is not self.root
+                POS = pos - 1
                 curNode = curNode.suffix
             elif curNode is self.root:
                 pos += 1
