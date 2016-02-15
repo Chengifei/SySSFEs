@@ -1,6 +1,6 @@
 /.project
 /.pydevproject
 /com.txt
-/__pycache__
+*/__pycache__
 *.json
 **/Makefile
