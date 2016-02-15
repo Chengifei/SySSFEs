@@ -19,8 +19,6 @@ class sim():
 
     def __init__(self, objs, name=None, step=10 ** -1, field=None,
                  const=None, tol=10 ** -3):
-        """:rtype None"""
-        # name should be aligned to be compatible with objs
         self.objs = objs
         self.field = field
         self.tol = tol  # tolerance
@@ -34,31 +32,27 @@ class sim():
 
     def start(self, end):
         '''sim.start(end) -> None'''
-        # self.i = 0
-        self.t = 0
-        # n = int(end / self.step)  # number of steps needed
+        self.t = self.__step
         self.x = [(0, dict(zip(self.objs, [obj.pos for obj in self.objs])))]
         self.v = [(0, dict(zip(self.objs, [obj.velocity for obj in self.objs])))]
 
-        # while self.i < n:
         while self.t < end:
-            self.t += self.__step
             x, v = self.compute()
             det = self.check(x, v)
-            if det == 1:
+            if det is True:
                 self.x.append((self.t, x))
                 self.v.append((self.t, v))
-            elif det == 0:
+            elif det is False:
                 self.cflag = True
                 if not self.heuristic():
                     self.heuabort = True
-                # self.i -= 1
+                continue
             else:
                 self.cflag, self.heuabort = False, False
                 self.__step = self.step
                 self.x.append((self.t, x))
                 self.v.append((self.t, det))
-            # self.i+=1
+            self.t += self.__step
 
     def check(self, x, v):
         # check constraints
@@ -73,7 +67,7 @@ class sim():
                 # coplanarity critical
                 det = S1.isIntersect(S2)
                 if det:
-                    if det == 2 or vmax * self.__step <= self.tol or self.heuabort:
+                    if det is 2 or vmax * self.__step <= self.tol or self.heuabort:
                         v[o1], v[o2] = mechanics.colSolver([o1.mass, o2.mass], [v[o1], v[o2]])
                         return v
                     else:
@@ -98,14 +92,13 @@ class sim():
             self.t += self.__step
             return True
         self.heuristiclist = sim.heuristiclist
-        return False
 
     def __str__(self):
         output = {}
         print(self.x)
         for obj in self.objs:
-            output[obj] = [_f[obj] for _f in self.x]
-        X = str(output).replace("], [", ']\n[').replace(']], ', ']]\n')
+            output[obj] = [_f[0] for _f in self.x]
+        X = str(output[self.objs[0]]).replace("}), (", '})\n(')
         # X = X.translate(sim.outputtable)
         return X + '\n'
 

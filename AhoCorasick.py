@@ -11,8 +11,8 @@ class ACtrie():
 
     def __init__(self, patternset):
         self.set = patternset
-        self.maxlen = len(max(patternset, key=len))
-        self.minlen = len(min(patternset, key=len))
+        self.maxlen = len(max(patternset, key=len)) if patternset else 0
+        self.minlen = len(min(patternset, key=len)) if patternset else 0
         self.root = _ACnode('ROOT', None)
         # should probably move to be a class variable
         self.counter = {}
