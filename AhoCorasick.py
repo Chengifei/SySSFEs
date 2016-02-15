@@ -10,8 +10,7 @@ integrated interpreter for aliasing.
 class ACtrie():
 
     def __init__(self, patternset):
-        self.patterns = list(patternset)
-        self.patterns.sort(key=len)  # sort by length to avoid EnfOfStr overriden
+        self.set = patternset
         self.maxlen = len(max(patternset, key=len)) if patternset else 0
         self.minlen = len(min(patternset, key=len)) if patternset else 0
         self.root = _ACnode('ROOT', None)
@@ -22,7 +21,7 @@ class ACtrie():
         self.links = set()
         self.nodesByLevel = [{} for i in range(self.maxlen + 1)]
         self.nodesByLevel[0][''] = self.root
-        for i in self.patterns:
+        for i in self.set:
             self.add(i)
         self.nodes = [i[j] for i in self.nodesByLevel for j in i]
         self.nodes = self.nodes[1:]
@@ -48,7 +47,7 @@ class ACtrie():
             return
 
     def init(self):
-        for _str in self.patterns:
+        for _str in self.set:
             self.counter[_str] = 0
             self.record[_str] = set()
 
@@ -178,4 +177,3 @@ class _ACnode():
 
     def __hash__(self):
         return hash(self.repr)
-

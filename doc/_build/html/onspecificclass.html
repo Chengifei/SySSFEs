@@ -31,7 +31,7 @@
 
   
     <link rel="top" title="Phyco 0.1-pre-alpha documentation" href="index.html"/>
-        <link rel="next" title="Math Manipulation in Phyco" href="math.html"/>
+        <link rel="next" title="Math manipulations in Phyco" href="math.html"/>
         <link rel="prev" title="Commands / Verbs Usage" href="commands.html"/> 
 
   
@@ -87,7 +87,7 @@
 <li class="toctree-l1"><a class="reference internal" href="physicsinphyco.html">Physics in Phyco (Tutorial)</a></li>
 <li class="toctree-l1"><a class="reference internal" href="commands.html">Commands / Verbs Usage</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="">On Specific Class</a></li>
-<li class="toctree-l1"><a class="reference internal" href="math.html">Math Manipulation in Phyco</a></li>
+<li class="toctree-l1"><a class="reference internal" href="math.html">Math manipulations in Phyco</a></li>
 <li class="toctree-l1"><a class="reference internal" href="terms.html">Terms and special syntaxes</a></li>
 </ul>
 
@@ -133,10 +133,14 @@
             
   <div class="section" id="on-specific-class">
 <h1>On Specific Class<a class="headerlink" href="#on-specific-class" title="Permalink to this headline">¶</a></h1>
-<p><em>You can see very self-explanatory syntaxes in classes. For those explicit names, explanations are omitted.</em></p>
+<p><em>You can see very self-explanatory syntaxes in classes. Explanations are omitted for those with explicit names.</em></p>
 <div class="admonition tip">
 <p class="first admonition-title">Tip</p>
-<p class="last">For any keyword arguments <code class="docutils literal"><span class="pre">name</span></code>, you don&#8217;t have to explicit name it.</p>
+<p class="last">For any arguments with <code class="docutils literal"><span class="pre">=</span></code>, the value after <code class="docutils literal"><span class="pre">=</span></code> is its default value.</p>
+</div>
+<div class="admonition attention">
+<p class="first admonition-title">Attention</p>
+<p class="last">For any arguments <code class="docutils literal"><span class="pre">name</span></code>, you never even try to explicitly name it. (Just ignore it.)</p>
 </div>
 <div class="admonition tip">
 <p class="first admonition-title">Tip</p>
@@ -144,7 +148,7 @@
 </div>
 <span class="target" id="module-mechanics"></span><dl class="class">
 <dt id="mechanics.obj">
-<em class="property">class </em><code class="descclassname">mechanics.</code><code class="descname">obj</code><span class="sig-paren">(</span><em>name=None</em>, <em>mass=1</em>, <em>initPos=vector()</em>, <em>point=True</em>, <em>mode='rigid'</em>, <em>charge=False</em>, <em>initv=vector()</em>, <em>material=None</em><span class="sig-paren">)</span><a class="headerlink" href="#mechanics.obj" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">mechanics.</code><code class="descname">obj</code><span class="sig-paren">(</span><em>name</em>, <em>mass</em>, <em>initPos=vector()</em>, <em>point=True</em>, <em>mode='rigid'</em>, <em>charge=False</em>, <em>initv=vector()</em>, <em>material=None</em><span class="sig-paren">)</span><a class="headerlink" href="#mechanics.obj" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -166,7 +170,7 @@
 
 <span class="target" id="module-sim"></span><dl class="class">
 <dt id="sim.sim">
-<em class="property">class </em><code class="descclassname">sim.</code><code class="descname">sim</code><span class="sig-paren">(</span><em>objs</em>, <em>name=None</em>, <em>step=10 ** -2</em>, <em>field=None</em>, <em>const=None</em>, <em>tol=10 ** -3</em><span class="sig-paren">)</span><a class="headerlink" href="#sim.sim" title="Permalink to this definition">¶</a></dt>
+<em class="property">class </em><code class="descclassname">sim.</code><code class="descname">sim</code><span class="sig-paren">(</span><em>objs</em>, <em>name</em>, <em>step=10 ** -2</em>, <em>field=None</em>, <em>const=None</em>, <em>tol=10 ** -3</em><span class="sig-paren">)</span><a class="headerlink" href="#sim.sim" title="Permalink to this definition">¶</a></dt>
 <dd><table class="docutils field-list" frame="void" rules="none">
 <col class="field-name" />
 <col class="field-body" />
@@ -197,7 +201,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="math.html" class="btn btn-neutral float-right" title="Math Manipulation in Phyco" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="math.html" class="btn btn-neutral float-right" title="Math manipulations in Phyco" accesskey="n">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="commands.html" class="btn btn-neutral" title="Commands / Verbs Usage" accesskey="p"><span class="fa fa-arrow-circle-left"></span> Previous</a>
