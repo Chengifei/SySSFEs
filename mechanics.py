@@ -42,7 +42,7 @@ class obj():
     def magneticForce(self):
         pass
 
-    def __init__(self, name=None, mass=1, initPos=linalg.vector(), point=True, mode='rigid',
+    def __init__(self, name, mass, initPos=linalg.vector(), point=True, mode='rigid',
                  charge=False, initv=linalg.vector(), material=None):
         self.name = name
         self.mass = mass

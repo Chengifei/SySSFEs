@@ -17,7 +17,7 @@ class sim():
     outputtable = str.maketrans('', '', "'{}")
     heuristiclist = [i for i in range(2, 21, 2)]
 
-    def __init__(self, objs, name=None, step=10 ** -1, field=None,
+    def __init__(self, name, objs, step=10 ** -1, field=None,
                  const=None, tol=10 ** -3):
         self.objs = objs
         self.field = field

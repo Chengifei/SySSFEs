@@ -3,7 +3,7 @@ In normal cases, you shouldn't invoke this directly.
 
 '''
 import math
-import error
+from phyco import error
 
 class vector():
     """define a vector in cartesian (rec) cylinder (cyl) or spherical (sph) mode.

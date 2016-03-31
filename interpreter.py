@@ -88,6 +88,7 @@ class Interpreter(ic):
         """
         Type = next(line)
         name = next(line)
+        assigning = {}
         if '"' in name:
             warn('Invalid name')
         if name in self.assigned:
@@ -98,15 +99,18 @@ class Interpreter(ic):
             A = '{name}={module}.{type}({arg})'
         else:
             warn('Unknown Object {!s}'.format(Type))
-        self.assigned[name] = Type
-        Arg = ','.join(line)
-        if Arg:
-            Arg += ',name="{name}"'.format(name=name)
-        else:
-            Arg = 'name="{name}"'.format(name=name)
+        assigning[name] = Type
+        Arg = 'name="{name}",'.format(name=name) + ','.join(line)
+        # if Arg:
+        #    Arg += ',name="{name}"'.format(name=name)
+        # else:
+        #    Arg = 'name="{name}"'.format(name=name)
 
         return A.format(name=name, type=Type,
                         module=self.moduledict[Type], arg=Arg)
+
+    def _assign(self, objdict):
+        self.assigned.update(objdict)
 
     def _plot(self, line):
         '''plot x y sizetuple

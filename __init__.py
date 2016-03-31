@@ -1,4 +1,4 @@
-from error import *
+from .error import UncompatibleEnvironment
 import sys
 if not (sys.version_info.major == 3 and sys.version_info.minor >= 5):
     raise UncompatibleEnvironment
