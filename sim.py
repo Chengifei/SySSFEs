@@ -1,7 +1,6 @@
 """Physics Simulator by Euler Method"""
 from itertools import combinations
-from math import isclose, fsum, ceil, log10
-from phycomath.linalg import vector
+from math import isclose, fsum, ceil
 from geom import segment
 import mechanics
 
@@ -18,7 +17,7 @@ class sim():
     heuristiclist = [i for i in range(2, 21, 2)]
 
     def __init__(self, name, objs, step=10 ** -1, field=None,
-                 const=None, tol=10 ** -3):
+                 const=set(), tol=10 ** -3):
         self.objs = objs
         self.field = field
         self.tol = tol  # tolerance
@@ -55,10 +54,10 @@ class sim():
             self.t += self.__step
 
     def check(self, x, v):
-        # check constraints
-        f = map(eval, self.constraints)
-        if not all(f):
+        # checking constraints
+        if not all(self.constraints):
             return False
+        # finding collision
         for o1, o2 in combinations(self.objs, 2):  # enumerate to find collision
             S1 = segment(x[o1], x[o1] + v[o1] * self.__step)
             S2 = segment(x[o2], x[o2] + v[o2] * self.__step)
@@ -77,8 +76,8 @@ class sim():
     def compute(self):
         x, v = self.x[-1][1].copy(), self.v[-1][1].copy()
         for Obj in self.objs:
-            # F = Obj.getforce(self.objs[1])  # compute resultant force
-            F = vector(0, -10)
+            # compute resultant force
+            F = sum(Obj.getforce(_Obj) for _Obj in self.objs) + self.field(x[Obj])
             a = F / Obj.mass
             # should have been improved
             x[Obj] += (v[Obj] + a * self.__step / 2) * self.__step

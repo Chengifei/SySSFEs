@@ -7,10 +7,10 @@ create, plot, set, start, print, list, alias, delete, help ,p.
 For help of specific command refer to themselves.
 
 """
-
+import re
 import sys
 from code import InteractiveConsole
-from error import *
+from error import UnderConstruction
 from AhoCorasick import ACtrie
 
 sys.ps1 = 'Phyco >'
@@ -20,8 +20,8 @@ ic = InteractiveConsole
 
 class Interpreter(ic):
 
-    moduledict = {'field':'mechanics', 'obj':'mechanics', 'constraint':'mechanics',
-                  'sim':'sim', 'event':'sim'}
+    moduledict = {'field': 'linalg', 'obj': 'mechanics', 'constraint': 'mechanics',
+                  'sim': 'sim', 'event': 'sim'}
 
     def __init__(self):
         ic.__init__(self)
@@ -30,7 +30,9 @@ class Interpreter(ic):
         self.aliastrie = ACtrie({})
         self.aliasstatus = False
         self.pool = []
-        ic.push(self, 'import mechanics, sim;from phycomath.linalg import vector,field')
+        ic.push(self, 'import mechanics, sim')
+        ic.push(self, 'from phycomath import linalg;from phycomath.genmath import strexpr')
+        self.localcopy = list(self.locals)
 
     def push(self, lines):
         self.pool = lines.split(';')
@@ -39,10 +41,15 @@ class Interpreter(ic):
             try:
                 A = self.__lexer(line)
                 if self.aliasstatus:
-                    A = self._translate(A)
+                    A = self.__translate(A)
             except:
-                warn('Wrong Syntax:{}\n'.format(str(A)))
-                A = ''
+                try:
+                    warn('Wrong Syntax: %s\n' % A)
+                except:
+                    warn('Wrong Syntax due to unknown error\n')
+                finally:
+                    A = ''
+
             ic.push(self, A)
 
     def __lexer(self, line):
@@ -57,27 +64,27 @@ class Interpreter(ic):
         if current == 'p':
             return ' '.join(self.gen)
         elif current in {'create', 'c'}:
-            return self._create(self.gen)
+            return self.create(self.gen)
         elif current in {'plot', 'p'}:
-            self._plot(self.gen)
+            self.plot(self.gen)
         elif current in {'set', 's'}:
-            return self._set(self.gen)
+            return self.set(self.gen)
         elif current == 'start':
-            return self._start(self.gen)
+            return self.start(self.gen)
         elif current == 'print':
-            return self._print(self.gen)
+            return self.print(self.gen)
         elif current == 'list':
-            return self._list(self.gen)
+            return self.list(self.gen)
         elif current == 'alias':
-            return self._alias(self.gen)
+            return self.alias(self.gen)
         elif current in {'delete', 'd', 'del'}:
-            return self._delete(self.gen)
+            return self.delete(self.gen)
         elif current in {'help', 'h'}:
-            return self._help(self.gen)
+            return self.help(self.gen)
         warn('Wrong Syntax:{}\n'.format(line))
         return ''
 
-    def _create(self, line):
+    def create(self, line):
         """create type name [attribname attrib [...]]
 
         All the commands input after name will be directly
@@ -88,7 +95,6 @@ class Interpreter(ic):
         """
         Type = next(line)
         name = next(line)
-        assigning = {}
         if '"' in name:
             warn('Invalid name')
         if name in self.assigned:
@@ -98,21 +104,16 @@ class Interpreter(ic):
         if Type in self.moduledict:
             A = '{name}={module}.{type}({arg})'
         else:
-            warn('Unknown Object {!s}'.format(Type))
-        assigning[name] = Type
+            warn('Unknown Object {!s}\n'.format(Type))
         Arg = 'name="{name}",'.format(name=name) + ','.join(line)
-        # if Arg:
-        #    Arg += ',name="{name}"'.format(name=name)
-        # else:
-        #    Arg = 'name="{name}"'.format(name=name)
 
         return A.format(name=name, type=Type,
                         module=self.moduledict[Type], arg=Arg)
 
-    def _assign(self, objdict):
+    def assign(self, objdict):
         self.assigned.update(objdict)
 
-    def _plot(self, line):
+    def plot(self, line):
         '''plot x y sizetuple
 
         plot data
@@ -121,7 +122,7 @@ class Interpreter(ic):
         # import matplotlib
         raise UnderConstruction
 
-    def _set(self, line):
+    def set(self, line):
         """set name attribute [...]
 
         set attribution of an object
@@ -130,10 +131,10 @@ class Interpreter(ic):
         pyline = ''
         name = next(line)
         for i in line:
-            pyline += name + '.{attr}={value};'.format(attr=i, value=next(line))
+            pyline += name + '.{};'.format(i)
         return pyline
 
-    def _start(self, line):
+    def start(self, line):
         '''start name
 
         start simulation, one at a time
@@ -141,7 +142,7 @@ class Interpreter(ic):
         '''
         return '{}.start({})'.format(next(line), next(line))
 
-    def _print(self, line):
+    def print(self, line):
         '''print name [attribname]
 
         print attribute or other data
@@ -156,22 +157,22 @@ class Interpreter(ic):
             return 'print({}.{})'.format(name, attr)
         return 'print({})'.format(name)
 
-    def _list(self, line):
+    def list(self, line):
         '''list [objectname]
 
         list all objects in engine or list attributes of object
 
         '''
-        print([(i, self.assigned[i]) for i in self.assigned])
+        print({i: self.locals[i].__class__ for i in self.locals if i not in self.localcopy})
         return ''
 
-    def _alias(self, line):
+    def alias(self, line):
         for _eqn in line:
             self.aliastrie.add(_eqn)
         self.aliasstatus = True
         return ''
 
-    def _delete(self, line):
+    def delete(self, line):
         '''d [objectname1 [...]]
 
         delete objects
@@ -183,11 +184,11 @@ class Interpreter(ic):
             A += i + ','
         return A
 
-    def _help(self, line):
+    def help(self, line):
         exec('print(help(Interpreter._{}))'.format(next(line)))
         return ''
 
-    def _translate(self, line):
+    def __translate(self, line):
         pass
 
     def __confirm(self):

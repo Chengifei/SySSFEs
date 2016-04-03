@@ -4,6 +4,7 @@ In normal cases, you shouldn't invoke this directly.
 '''
 import math
 from phyco import error
+from . import calculus, genmath
 
 class vector():
     """define a vector in cartesian (rec) cylinder (cyl) or spherical (sph) mode.
@@ -145,11 +146,9 @@ class matrix():
             return self.data[arg[0]][arg[1]]  # !
 
     def __mul__(self, n):
-        # scalar multiplication ------------------------------------------------
         return matrix([[self[r][c] * n for c in range(self.col)] for r in range(self.row)])
 
     def mul(self):
-        # multiplication of matrices ---------------------------------------------
         pass
 
     def __rowSep(self, ROW):
@@ -157,7 +156,6 @@ class matrix():
         return row
 
     def det(self, operator=False):
-        # determinant of a matrix ------------------------------------------------
         if self.isSquare:
             if operator and self.row == 3:
                 temp = []
@@ -205,18 +203,21 @@ class field():
 
     __slots__ = ('params', 'x', 'y', 'z')
 
-    def __init__(self, x, y, z=None, *paramlist):
+    def __init__(self, name, x, y, z=genmath.plexpr(), *paramlist):
         self.x = x
         self.y = y
         self.z = z
         self.params = paramlist
 
-    def __call__(self, vector):
-        _values = vector.list()
-        return vector(self.x[_values], self.y[_values], self.z[_values])
+    def __call__(self, pos: vector):
+        _values = dict(zip(['x', 'y', 'z'], pos.list()))
+        return vector(self.x(_values), self.y(_values), self.z(_values))
 
     def __add__(self, other):
         return field(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other):
+        return field(self.x - other.x, self.y - other.y, self.z - other.z)
 
     def curl(self, pos):
         return

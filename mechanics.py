@@ -1,10 +1,11 @@
 '''This is a Phyco module deal with dynamics.
 For now, it supports ,specifically, collision detection and 2-D dynamics.'''
-from phycomath import linalg
+from phycomath import linalg, genmath
 import geom
 from __init__ import G, epsilon0
 from math import pi
 from error import UnderConstruction
+from string import Template
 
 
 def colSolver(m=None, v=None, e=1):
@@ -33,14 +34,13 @@ class obj():
     __slots__ = ('name', 'mass', 'ability', 'pos', 'velocity',
                  'mode', 'shape', 'charge', 'material')
 
+    reprTemplate = Template('${name}:mass=${mass},pos=${pos},v=${v}')
+
     def newtonianGravity(self, other, r):
         return G * self.mass * other.mass / r / r
 
     def coulombForce(self, other, r):
-        return self.charge * other.charge / 4 / pi / epsilon0
-
-    def magneticForce(self):
-        pass
+        return self.charge * other.charge / 4 / pi / epsilon0 / r / r
 
     def __init__(self, name, mass, initPos=linalg.vector(), point=True, mode='rigid',
                  charge=False, initv=linalg.vector(), material=None):
@@ -52,20 +52,25 @@ class obj():
         self.mode = mode
         if point:
             self.shape = 0
+        self.charge = 0
         if charge:
             self.charge = charge
-            self.ability = True
         self.material = material
 
     def getforce(self, obj):
-        if self.ability:
-            return
+        if self.charge:
+            return self.coulombForce(obj)
         return linalg.vector()
-        raise UnderConstruction
 
     def __repr__(self):
         return self.name
 
+    def __str__(self):
+        return obj.reprTemplate.substitute(name=self.name,
+                                           mass=self.mass,
+                                           pos=self.pos,
+                                           v=self.velocity)
 
-class constraint():
+
+class constraint(genmath.relexpr):
     pass

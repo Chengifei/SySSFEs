@@ -17,7 +17,7 @@ class plexpr:  # polish notation
                  'sinh(': math.sinh, 'cosh(': math.cosh, 'tanh(': math.tanh,
                  'ln(': math.log, 'sqrt(': math.sqrt}
 
-    def __init__(self, operator='+', arg1=0, arg2=None):
+    def __init__(self, operator='+', arg1=0, arg2=0):
 
 #        assert operator in plexpr.opfuncmap
         self.stroperator = operator
@@ -260,17 +260,17 @@ class strexpr:
         tokens = [0] + tokens + [len(self.str)]
         return [self.str[x:y] for x, y in zip(tokens, tokens[1:]) if y != x]
 
-    def process(self, _list):
+    def process(self, list):
 #         print(self.bs)
         # first token is not a number
-        if _list[0] in ('-', '+'):
+        if list[0] in ('-', '+'):
             self.process(['0'] + self.cut())
         else:
             refop = []
             refcur = []
             opreq = False  # request the first operator in brackets
             bcount = 0  # bracket level count
-            for token in _list:
+            for token in list:
                 if opreq and token in strexpr.operators:
                     opreq = 2
                 if token is '(':
@@ -327,12 +327,12 @@ class strexpr:
         return str(self.final)
 
 
-class eqn():
+class relexpr():
 
-    def __init__(self, _str, values=None, params=None):
+    def __init__(self, _str, values={}):
         self.l, self.r = _str.split('=')
-        self.l = strexpr(self.l, params)
-        self.r = strexpr(self.r, params)
+        self.l = strexpr(self.l, values)
+        self.r = strexpr(self.r, values)
         self.values = values
 
     def __bool__(self):
@@ -344,7 +344,7 @@ if __name__ == '__main__':
         try:
 #             expr = input('>>> ')
 #             print(isclose(strexpr(expr)(), eval(expr.replace('^', '**'))))
-            print(strexpr(input('>>>')).final)
+            print(strexpr(input('>>>'))())
         except SyntaxError:
             print('Unbalanced Brackets')
 #         except KeyboardInterrupt:
