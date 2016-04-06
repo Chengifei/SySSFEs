@@ -28,9 +28,6 @@ class plexpr:  # polish notation
         self.cursor = [2]  # cursor are initialized to point to arg2
         self.level = 1
 
-    def init(self):
-        self.prioritydict = {1: 1}
-
     def get(self, cursors):
         result = self
         for i in self.cursor:
@@ -116,7 +113,7 @@ class plexpr:  # polish notation
         pass
 
     def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
-        print(self, other, self.cursor, refcur, sep='|')
+#         print(self, other, self.cursor, refcur, sep='|')
         if other in strexpr.operators:  # token detected
             if bovrd:  # the first operator in a pair of brackets
                 op1, op2 = 0, 1
@@ -133,7 +130,6 @@ class plexpr:  # polish notation
             else:
                 # the appeding operator has lower priotity
                 if op2 < op1 and not bsovrd and self.level > len(refcur) + 1:
-                    print(op1, op2)
                     del self.cursor[-1]
                     self.level -= 1
                 assert self.isEnd()
