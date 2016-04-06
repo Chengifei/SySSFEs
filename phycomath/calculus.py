@@ -3,12 +3,14 @@ Created on Feb 9, 2016
 
 @author: yfzheng
 '''
+from copy import deepcopy as copy
 from phyco.phycomath.genmath import strexpr, plexpr
 from phyco.error import UnderConstruction
 
 
 def diff(expr: plexpr, var: str):
 
+    # these should be contained in a class
     def dadd(expr, var):
         return plexpr('+', diff(expr[1], var), diff(expr[2], var))
 
@@ -26,12 +28,26 @@ def diff(expr: plexpr, var: str):
                              plexpr('*', diff(expr[2], var), expr[1])),
                       plexpr('*', expr[2], expr[2]))
 
-    corrRule = {'+': dadd, '-': dsub, '*': dmul, '/': ddiv,
-#               'ln(': diff.dln
-                }
+    def dpow(expr, var):
+        return plexpr('*',
+                      copy(expr),
+                      plexpr('+',
+                             plexpr('*',
+                                    diff(expr[2], var),
+                                    plexpr('ln(', None, expr[1])),
+                             plexpr('/',
+                                    plexpr('*',
+                                           expr[2],
+                                           diff(expr[1], var)),
+                                    expr[1]
+                                    )
+                             ))
 
-    def chainrule(expr, var):
-        pass
+    def dln(expr, var):
+        return plexpr('/', diff(expr[2], var), copy(expr))
+
+    corrRule = {'+': dadd, '-': dsub, '*': dmul, '/': ddiv, '^': dpow,
+                'ln(': dln}
 
     if type(expr) is plexpr:
         try:

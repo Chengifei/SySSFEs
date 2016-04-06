@@ -34,10 +34,6 @@ class plexpr:  # polish notation
             result = result[i]
         return result
 
-    @property
-    def operate(self):
-        return plexpr.opfuncmap[self.stroperator]
-
     def isEnd(self):
         # recursive code need optimization
         result = self
@@ -52,20 +48,25 @@ class plexpr:  # polish notation
             return False
         return True
 
-    def stricteq(self, other):
-        if type(other) is plexpr:
-            if isinstance(self[1], type(other[1])) and type(self[1]) in TYPE:
-                a = self[1] == other[1]
-            else:
-                a = self[1].stricteq(other[1])
-            if isinstance(self[2], type(other[2])) and type(self[2]) in TYPE:
-                b = self[2] == other[2]
-            else:
-                b = self[2].stricteq(other[2])
-            return a and b
-        return False
+#     def stricteq(self, other):
+#         if type(other) is plexpr:
+#             if isinstance(self[1], type(other[1])) and type(self[1]) in TYPE:
+#                 a = self[1] == other[1]
+#             else:
+#                 a = self[1].stricteq(other[1])
+#             if isinstance(self[2], type(other[2])) and type(self[2]) in TYPE:
+#                 b = self[2] == other[2]
+#             else:
+#                 b = self[2].stricteq(other[2])
+#             return a and b
+#         return False
 
-    # the follwing five are shortcuts
+    # the follwing four are shortcuts
+
+    @property
+    def operate(self):
+        return plexpr.opfuncmap[self.stroperator]
+
     @property
     def req(self):
         if self.cursor:
@@ -108,6 +109,10 @@ class plexpr:  # polish notation
     def reqexprop(self):  # return the immediate opearator of the req
         return self.reqexpr.stroperator
 
+    @classmethod
+    async def findbottom(cls, expr):
+        pass
+
     def append(self, other, refop=None, bovrd=False, refcur=[]):
 #         print(self, other, self.cursor, refcur, sep='|')
         if other in strexpr.operators:  # token detected
@@ -138,38 +143,42 @@ class plexpr:  # polish notation
         else:  # number detected
             self.req = int(other) if other.isnumeric() else float(other)
 
+#     @classmethod
+#     def simplify(cls, expr):
+#         op1, op2 = expr[1], expr[2]
+#         if {type(op1), type(op2)}.issubset({int, float}):
+#             expr = expr.operate(op1, op2)
+#         elif type(op1) is plexpr:
+#             if not expr.arg1.stricteq(plexpr.simplify(op1)):
+#                 expr[1] = plexpr.simplify(op1)
+#                 expr = plexpr.simplify(expr)
+#             else:
+#                 if 0 in expr[1]:
+#                     if expr.arg1.stroperator is '*':
+#                         expr[1] = 0
+#                         expr = plexpr.simplify(expr)
+#                     elif expr[1].stroperator is '+':
+#                         expr[1] = expr[1][1] if expr[1][1] != 0 else expr[1][2]
+#                 elif expr.arg1.stroperator is '*' and 1 in expr[1]:
+#                     expr[1] = expr[1][1] if expr[1][1] != 1 else expr[1][2]
+#         elif type(op2) is plexpr:
+#             if not expr.arg2.stricteq(plexpr.simplify(op2)):
+#                 expr[2] = plexpr.simplify(op2)
+#                 expr = plexpr.simplify(expr)
+#             else:
+#                 if 0 in expr[2]:
+#                     if expr.arg2.stroperator is '*':
+#                         expr[2] = 0
+#                         expr = plexpr.simplify(expr)
+#                     elif expr[1].stroperator is '+':
+#                         expr[2] = expr[2][1] if expr[2][1] != 0 else expr[2][2]
+#                 elif expr.arg2.stroperator is '*' and 1 in expr[2]:
+#                     expr[2] = expr[2][1] if expr[2][1] != 1 else expr[2][2]
+#         return expr
+
     @classmethod
     def simplify(cls, expr):
-        op1, op2 = expr[1], expr[2]
-        if {type(op1), type(op2)}.issubset({int, float}):
-            expr = expr.operate(op1, op2)
-        elif type(op1) is plexpr:
-            if not expr.arg1.stricteq(plexpr.simplify(op1)):
-                expr[1] = plexpr.simplify(op1)
-                expr = plexpr.simplify(expr)
-            else:
-                if 0 in expr[1]:
-                    if expr.arg1.stroperator is '*':
-                        expr[1] = 0
-                        expr = plexpr.simplify(expr)
-                    elif expr[1].stroperator is '+':
-                        expr[1] = expr[1][1] if expr[1][1] != 0 else expr[1][2]
-                elif expr.arg1.stroperator is '*' and 1 in expr[1]:
-                    expr[1] = expr[1][1] if expr[1][1] != 1 else expr[1][2]
-        elif type(op2) is plexpr:
-            if not expr.arg2.stricteq(plexpr.simplify(op2)):
-                expr[2] = plexpr.simplify(op2)
-                expr = plexpr.simplify(expr)
-            else:
-                if 0 in expr[2]:
-                    if expr.arg2.stroperator is '*':
-                        expr[2] = 0
-                        expr = plexpr.simplify(expr)
-                    elif expr[1].stroperator is '+':
-                        expr[2] = expr[2][1] if expr[2][1] != 0 else expr[2][2]
-                elif expr.arg2.stroperator is '*' and 1 in expr[2]:
-                    expr[2] = expr[2][1] if expr[2][1] != 1 else expr[2][2]
-        return expr
+        bottoms = plexpr.findbottom(expr)
 
     def __iter__(self):
         for i in (1, 2):

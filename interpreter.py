@@ -7,6 +7,7 @@ create, plot, set, start, print, list, alias, delete, help ,p.
 For help of specific command refer to themselves.
 
 """
+from __future__ import generator_stop
 import re
 import sys
 from code import InteractiveConsole
@@ -65,7 +66,7 @@ class Interpreter(ic):
             return ' '.join(self.gen)
         elif current in {'create', 'c'}:
             return self.create(self.gen)
-        elif current in {'plot', 'p'}:
+        elif current in {'plot'}:
             self.plot(self.gen)
         elif current in {'set', 's'}:
             return self.set(self.gen)
@@ -81,13 +82,11 @@ class Interpreter(ic):
             return self.delete(self.gen)
         elif current in {'help', 'h'}:
             return self.help(self.gen)
-        warn('Wrong Syntax:{}\n'.format(line))
-        return ''
 
     def create(self, line):
-        """create type name [attribname attrib [...]]
+        """create type _name [attribname attrib [...]]
 
-        All the commands input after name will be directly
+        All the commands input after _name will be directly
         passed to __init__() of their own classes. User should
         strictly obey the grammar of their constructors. Refer
         to specific help if needed.
@@ -95,29 +94,35 @@ class Interpreter(ic):
         """
         Type = next(line)
         name = next(line)
-        if '"' in name:
-            warn('Invalid name')
-        if name in self.assigned:
-            warn("You're about to replacing the old '{}'".format(name))
+        namelist = name.split(',')
+        _name = namelist.pop(0)
+        if '"' in _name:
+            warn('Invalid _name')
+        if _name in self.assigned:
+            warn("You're about to replacing the old '{}'".format(_name))
             if not self.__confirm():
+                warn('Aborting, everything left untouched')
                 return ''
         if Type in self.moduledict:
-            A = '{name}={module}.{type}({arg})'
+            template = '{name}={module}.{type}({arg})'
         else:
             warn('Unknown Object {!s}\n'.format(Type))
-        Arg = 'name="{name}",'.format(name=name) + ','.join(line)
+        Arg = 'name="{name}",'.format(name=_name) + ','.join(line)
 
-        return A.format(name=name, type=Type,
-                        module=self.moduledict[Type], arg=Arg)
+        B = template.format(name=_name, type=Type,
+                            module=self.moduledict[Type], arg=Arg) + ';'
+
+        for _name in namelist:
+            B += template.format(name=_name, type=Type,
+                                 module=self.moduledict[Type], arg=Arg) + ';'
+
+        return B
 
     def assign(self, objdict):
         self.assigned.update(objdict)
 
     def plot(self, line):
         '''plot x y sizetuple
-
-        plot data
-
         '''
         # import matplotlib
         raise UnderConstruction
@@ -151,7 +156,7 @@ class Interpreter(ic):
         name = next(line)
         try:
             attr = next(line)
-        except StopIteration:
+        except RuntimeError:
             attr = None
         if attr:
             return 'print({}.{})'.format(name, attr)
@@ -163,7 +168,16 @@ class Interpreter(ic):
         list all objects in engine or list attributes of object
 
         '''
-        print({i: self.locals[i].__class__ for i in self.locals if i not in self.localcopy})
+        try:
+            print({i: self.locals[i].__class__
+                   for i in self.locals
+                   if i not in self.localcopy and
+                   isinstance(i, self.locals[next(line)])})
+        except KeyError:
+            warn('Requesting nonexisting type\n')
+        except StopIteration:
+            print({i: self.locals[i].__class__
+                   for i in self.locals if i not in self.localcopy})
         return ''
 
     def alias(self, line):
@@ -202,4 +216,4 @@ class Interpreter(ic):
 
 if __name__ == '__main__':
     PHYCO = Interpreter()
-    PHYCO.interact('PhycoE v0.0.0 ')
+    PHYCO.interact('PhycoE v0.0.0')
