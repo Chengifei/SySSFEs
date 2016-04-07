@@ -4,7 +4,9 @@ In normal cases, you shouldn't invoke this directly.
 '''
 import math
 from phyco import error
-from . import calculus, genmath
+from .genmath import *
+from string import Template
+
 
 class vector():
     """define a vector in cartesian (rec) cylinder (cyl) or spherical (sph) mode.
@@ -201,12 +203,15 @@ class operator():
 
 class field():
 
-    __slots__ = ('params', 'x', 'y', 'z')
+    __slots__ = ('params', 'x', 'y', 'z', 'name')
+    template = Template('field ${name}: {x: ${x}, y: ${y}, z: ${z} }')
 
-    def __init__(self, name, x, y, z=genmath.plexpr(), *paramlist):
-        self.x = x
-        self.y = y
-        self.z = z
+    def __init__(self, name, x, y, z='0', *paramlist):
+        self.name = name
+        self.x = strexpr(x).final
+        self.y = strexpr(y).final
+        self.z = strexpr(z).final
+        print(type(self.x))
         self.params = paramlist
 
     def __call__(self, pos: vector):
@@ -214,10 +219,10 @@ class field():
         return vector(self.x(_values), self.y(_values), self.z(_values))
 
     def __add__(self, other):
-        return field(self.x + other.x, self.y + other.y, self.z + other.z)
+        return field(None, self.x + other.x, self.y + other.y, self.z + other.z)
 
     def __sub__(self, other):
-        return field(self.x - other.x, self.y - other.y, self.z - other.z)
+        return field(None, self.x - other.x, self.y - other.y, self.z - other.z)
 
     def curl(self, pos):
         return
@@ -227,3 +232,7 @@ class field():
 
     def div(self, pos):
         return
+
+    def __repr__(self):
+        return field.template.substitute(x=self.x, y=self.y,
+                                         z=self.z, name=self.name)

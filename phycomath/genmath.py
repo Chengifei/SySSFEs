@@ -9,6 +9,7 @@ from collections import OrderedDict as odict
 from string import Template
 from operator import add, sub, mul, truediv, pow
 from copy import deepcopy as copy
+from phyco.error import MathError
 
 
 class plexpr:  # polish notation
@@ -150,6 +151,12 @@ class plexpr:  # polish notation
                     elif subexpr[0] is '*' and (subexpr[1] is 1 or subexpr[2] is 1):
                             expr.set(i, subexpr[2] if subexpr[1] is 1 else subexpr[1])
         return expr
+
+    def __add__(self, other):
+        return plexpr('+', self, other)
+
+    def __sub__(self, other):
+        return plexpr('-', self, other)
 
     def __iter__(self):
         for i in (1, 2):
@@ -339,11 +346,20 @@ class strexpr:
 
 class relexpr():
 
-    def __init__(self, _str, values={}):
-        self.l, self.r = _str.split('=')
+    def __init__(self, name, _str, values={}):
+        try:
+            self.l, self.r = _str.split('=')
+        except:
+            raise MathError('Invalid equation')
         self.l = strexpr(self.l, values)
         self.r = strexpr(self.r, values)
         self.values = values
+
+    def setvalues(self, valuedict: dict):
+        self.values = valuedict
+
+    def simplify(self):
+        pass
 
     def __bool__(self):
         return self.l(self.values) == self.r(self.values)
@@ -376,11 +392,12 @@ if __name__ == '__main__':
 #     from math import isclose
     while True:
         try:
-            expr = input('>>> ')
-            se = strexpr(expr)
-            plexpr.simplify(se.final)
+#             expr = input('>>> ')
+#             se = strexpr(expr)
+#             plexpr.simplify(se.final)
 #             print(isclose(se(), eval(expr.replace('^', '**'))), se.final)
 #             print(se())
+            print(bool(relexpr(input('>>> '))))
         except SyntaxError:
             print('Unbalanced Brackets')
 #         except KeyboardInterrupt:
