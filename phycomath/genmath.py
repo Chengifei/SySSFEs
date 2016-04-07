@@ -2,7 +2,9 @@
 """
 import AhoCorasick
 import math
+from error import UnspecifiedVariable
 # import abc
+from itertools import product as cartesian
 from collections import OrderedDict as odict
 from string import Template
 from operator import add, sub, mul, truediv, pow
@@ -28,11 +30,18 @@ class plexpr:  # polish notation
         self.cursor = [2]  # cursor are initialized to point to arg2
         self.level = 1
 
-    def get(self, cursors):
+    def get(self, cursor):
         result = self
-        for i in self.cursor:
+        for i in cursor:
             result = result[i]
         return result
+
+    def set(self, cursor, value):
+        result = self
+        if cursor:
+            for i in cursor[:-1]:
+                result = result[i]
+            result[cursor[-1]] = value
 
     def isEnd(self):
         # recursive code need optimization
@@ -47,19 +56,6 @@ class plexpr:  # polish notation
                 result = result[i]
             return False
         return True
-
-#     def stricteq(self, other):
-#         if type(other) is plexpr:
-#             if isinstance(self[1], type(other[1])) and type(self[1]) in TYPE:
-#                 a = self[1] == other[1]
-#             else:
-#                 a = self[1].stricteq(other[1])
-#             if isinstance(self[2], type(other[2])) and type(self[2]) in TYPE:
-#                 b = self[2] == other[2]
-#             else:
-#                 b = self[2].stricteq(other[2])
-#             return a and b
-#         return False
 
     # the follwing four are shortcuts
 
@@ -104,10 +100,6 @@ class plexpr:  # polish notation
     def reqexprop(self):  # return the immediate opearator of the req
         return self.reqexpr.stroperator
 
-    @classmethod
-    async def findbottom(cls, expr):
-        pass
-
     def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
 #         print(self, other, self.cursor, refcur, sep='|')
         if other in strexpr.operators:  # token detected
@@ -138,42 +130,26 @@ class plexpr:  # polish notation
         else:  # number detected
             self.req = int(other) if other.isnumeric() else float(other)
 
-#     @classmethod
-#     def simplify(cls, expr):
-#         op1, op2 = expr[1], expr[2]
-#         if {type(op1), type(op2)}.issubset({int, float}):
-#             expr = expr.operate(op1, op2)
-#         elif type(op1) is plexpr:
-#             if not expr.arg1.stricteq(plexpr.simplify(op1)):
-#                 expr[1] = plexpr.simplify(op1)
-#                 expr = plexpr.simplify(expr)
-#             else:
-#                 if 0 in expr[1]:
-#                     if expr.arg1.stroperator is '*':
-#                         expr[1] = 0
-#                         expr = plexpr.simplify(expr)
-#                     elif expr[1].stroperator is '+':
-#                         expr[1] = expr[1][1] if expr[1][1] != 0 else expr[1][2]
-#                 elif expr.arg1.stroperator is '*' and 1 in expr[1]:
-#                     expr[1] = expr[1][1] if expr[1][1] != 1 else expr[1][2]
-#         elif type(op2) is plexpr:
-#             if not expr.arg2.stricteq(plexpr.simplify(op2)):
-#                 expr[2] = plexpr.simplify(op2)
-#                 expr = plexpr.simplify(expr)
-#             else:
-#                 if 0 in expr[2]:
-#                     if expr.arg2.stroperator is '*':
-#                         expr[2] = 0
-#                         expr = plexpr.simplify(expr)
-#                     elif expr[1].stroperator is '+':
-#                         expr[2] = expr[2][1] if expr[2][1] != 0 else expr[2][2]
-#                 elif expr.arg2.stroperator is '*' and 1 in expr[2]:
-#                     expr[2] = expr[2][1] if expr[2][1] != 1 else expr[2][2]
-#         return expr
-
     @classmethod
     def simplify(cls, expr):
-        bottoms = plexpr.findbottom(expr)
+        for L in range(getlevel(expr), 0, -1):
+            bottoms = findlevel(expr, L)
+            bottoms = {_cur[:-1] for _cur in bottoms}
+            for i in bottoms:
+                subexpr = expr.get(i)
+                typeset = {type(subexpr[1]), type(subexpr[2])}
+                if typeset <= {int, float, str}:
+                    if str not in typeset:
+                        expr.set(i, subexpr())
+                elif typeset <= {int, float, str, plexpr}:
+                    if subexpr[1] is 0 or subexpr[2] is 0:
+                        if subexpr[0] is '*':
+                            expr.set(i, 0)
+                        elif expr[0] is '+':
+                            expr.set(i, subexpr[2] if subexpr[2] else subexpr[1])
+                    elif subexpr[0] is '*' and (subexpr[1] is 1 or subexpr[2] is 1):
+                            expr.set(i, subexpr[2] if subexpr[1] is 1 else subexpr[1])
+        return expr
 
     def __iter__(self):
         for i in (1, 2):
@@ -205,11 +181,17 @@ class plexpr:  # polish notation
         if type(op1) is plexpr:
             op1 = op1(params)
         elif type(op1) is str:
-            op1 = params[op1]
+            try:
+                op1 = params[op1]
+            except KeyError:
+                raise UnspecifiedVariable
         if type(op2) is plexpr:
             op2 = op2(params)
         elif type(op2) is str:
-            op2 = params[op2]
+            try:
+                op2 = params[op2]
+            except KeyError:
+                raise UnspecifiedVariable
         if op1 is not None:
             return self.operate(op1, op2)
         return self.operate(op2)
@@ -247,6 +229,7 @@ class strexpr:
         self.preprocess()
         self.final = plexpr('+', 0, None)  # error-prone
         self.process(self.cut())
+        # should mark innermost level here
 #         print(self.final)
 
     def preprocess(self):
@@ -365,13 +348,39 @@ class relexpr():
     def __bool__(self):
         return self.l(self.values) == self.r(self.values)
 
+
+def getlevel(expr: plexpr):
+    string = repr(expr)  # reverse a plexpr to usual expression
+    blevel = 0
+    result = {}
+    for index, i in enumerate(string):
+        if i is '(':
+            blevel += 1
+        elif i is ')':
+            blevel -= 1
+        result[index] = blevel
+    return max(result.values())
+
+
+def findlevel(expr: plexpr, level: int):
+    # enumerate!
+    possibilities = cartesian((1, 2), repeat=level)
+    for i in possibilities:
+        try:
+            expr.get(i)
+            yield i
+        except (TypeError, IndexError):  # indexerror for str
+            pass
+
 if __name__ == '__main__':
-    from math import isclose
+#     from math import isclose
     while True:
         try:
             expr = input('>>> ')
-            print(isclose(strexpr(expr)(), eval(expr.replace('^', '**'))))
-#             print(strexpr(expr)())
+            se = strexpr(expr)
+            plexpr.simplify(se.final)
+#             print(isclose(se(), eval(expr.replace('^', '**'))), se.final)
+#             print(se())
         except SyntaxError:
             print('Unbalanced Brackets')
 #         except KeyboardInterrupt:

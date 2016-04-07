@@ -4,7 +4,7 @@ Created on Feb 9, 2016
 @author: yfzheng
 '''
 from copy import deepcopy as copy
-from phyco.phycomath.genmath import strexpr, plexpr
+from phycomath.genmath import strexpr, plexpr
 from phyco.error import UnderConstruction
 
 
@@ -61,4 +61,4 @@ def diff(expr: plexpr, var: str):
 
 
 if __name__ == '__main__':
-    print(plexpr.simplify(diff(strexpr(input('>>>')).final, 'x')))
+    print(plexpr.simplify((diff(strexpr(input('d/dx ')).final, 'x'))))

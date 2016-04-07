@@ -2,6 +2,10 @@ class MathError(Exception):
     pass
 
 
+class UnspecifiedVariable(MathError):
+    pass
+
+
 class UnderConstruction(Exception):
     pass
 
