@@ -83,23 +83,19 @@ class plexpr:  # polish notation
 
     @property
     def reqexpr(self):
-        if self.cursor:
-            result = self
-            for i in self.cursor[:-1]:
-                result = result[i]
-            return result
-        else:
-            print('EUREKA')
-            return self
+        result = self
+        for i in range(self.level - 1):
+            result = result[2]
+        return result
 
     @reqexpr.setter
     def reqexpr(self, value):
-        if self.cursor[1:]:
+        if self.level > 1:  # equivalent to >=2
             result = self
-            for i in self.cursor[:-2]:
-                result = result[i]
-            result[self.cursor[-2]] = value
-        elif self.cursor:
+            for i in range(self.level - 2):
+                result = result[2]
+            result[2] = value
+        elif self.level:
             self[0] = value[0]
             self[1] = value[1]
             self[2] = value[2]
@@ -113,7 +109,7 @@ class plexpr:  # polish notation
         pass
 
     def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
-        print(self, other, self.cursor, refcur, sep='|')
+#         print(self, other, self.cursor, refcur, sep='|')
         if other in strexpr.operators:  # token detected
             if bovrd:  # the first operator in a pair of brackets
                 op1, op2 = 0, 1
@@ -125,19 +121,16 @@ class plexpr:  # polish notation
                 assert self.isEnd()  # originally if
                 # take the operator to the last appended operand
                 self.req = plexpr(other, self.req, None)
-                self.cursor.append(2)
                 self.level += 1
             else:
                 # the appeding operator has lower priotity
                 if op2 < op1 and not bsovrd and self.level > len(refcur) + 1:
-                    del self.cursor[-1]
                     self.level -= 1
                 assert self.isEnd()
                 self.reqexpr = plexpr(other, copy(self.reqexpr), None)
         elif other in strexpr.tokens:  # separable tokens
             if other in strexpr.predeffunc:
                 self.req = plexpr(other, self.req, None)
-                self.cursor.append(2)
                 self.level += 1
             # to eliminate brackets from numbers
         elif other[0].isalpha():
