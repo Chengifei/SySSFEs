@@ -113,7 +113,7 @@ class plexpr:  # polish notation
         pass
 
     def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
-#         print(self, other, self.cursor, refcur, sep='|')
+        print(self, other, self.cursor, refcur, sep='|')
         if other in strexpr.operators:  # token detected
             if bovrd:  # the first operator in a pair of brackets
                 op1, op2 = 0, 1
@@ -307,8 +307,16 @@ class strexpr:
                     refop.append(self.final.reqexprop)
                     refcur.append(copy(self.final.cursor) + [2])
                     opreq = True
+
                 # handle backspace exception
-                if index not in _R:
+
+                def bsovrdperm(index):
+                    for i in range(_O[index], index):
+                        if i in _O and _T[i] < _T[index]:
+                            return True
+                    return False
+
+                if index not in _R or bsovrdperm(index):
                     bsovrd = True
                 self.final.append(token,
                                   refop.pop(-1) if refop else None,
@@ -325,22 +333,22 @@ class strexpr:
                     self.final.cursor = refcur.pop(-1)
 #             self.final = plexpr.simplify(self.final)
 
-    def matchbrackets(self):
-        Lindices, Rindices = list(self.expr['(']), list(self.expr[')'])
-        Lindices.sort()
-        Rindices.sort()
-        record = {i: 0 for i in Lindices}
-        for i in Lindices:
-            for j in enumerate(Rindices):
-                if j[1] > i:
-                    if record[i]:
-                        record[i] = Rindices[record[i][0] + 1]
-                        record[i] = j
-                    else:
-                        record[i] = j
-                        break
-        record = {i: record[i][1] for i in record}
-        return record
+#     def matchbrackets(self):
+#         Lindices, Rindices = list(self.expr['(']), list(self.expr[')'])
+#         Lindices.sort()
+#         Rindices.sort()
+#         record = {i: 0 for i in Lindices}
+#         for i in Lindices:
+#             for j in enumerate(Rindices):
+#                 if j[1] > i:
+#                     if record[i]:
+#                         record[i] = Rindices[record[i][0] + 1]
+#                         record[i] = j
+#                     else:
+#                         record[i] = j
+#                         break
+#         record = {i: record[i][1] for i in record}
+#         return record
 
     def __call__(self, valuedict={}):
         valuedict.update({'Pi': math.pi, 'e': math.e})
