@@ -1,15 +1,14 @@
 """Generic Math Processing
 """
-import AhoCorasick
+from AhoCorasick import ACProcessor
+from error import UnspecifiedVariable, MathError
 import math
-from error import UnspecifiedVariable
 # import abc
 from itertools import product as cartesian
 from collections import OrderedDict as odict
 from string import Template
-from operator import add, sub, mul, truediv, pow
+from operator import add, sub, mul, truediv
 from copy import deepcopy as copy
-from phyco.error import MathError
 
 
 class plexpr:  # polish notation
@@ -27,8 +26,8 @@ class plexpr:  # polish notation
         self.priority = strexpr.priority.get(operator, 4)
         self.arg1 = arg1
         self.arg2 = arg2
-        self.maxlevel = 1
-        self.cursor = [2]  # cursor are initialized to point to arg2
+#         self.maxlevel = 1
+#         self.cursor = [2]  # cursor are initialized to point to arg2
         self.level = 1
 
     def get(self, cursor):
@@ -67,21 +66,21 @@ class plexpr:  # polish notation
     @property
     def req(self):
         result = self
-        for i in range(self.level):
+        for _ in range(self.level):
             result = result[2]
         return result
 
     @req.setter
     def req(self, value):
         result = self
-        for i in range(self.level - 1):
+        for _ in range(self.level - 1):
             result = result[2]
         result[2] = value
 
     @property
     def reqexpr(self):
         result = self
-        for i in range(self.level - 1):
+        for _ in range(self.level - 1):
             result = result[2]
         return result
 
@@ -89,7 +88,7 @@ class plexpr:  # polish notation
     def reqexpr(self, value):
         if self.level > 1:  # equivalent to >=2
             result = self
-            for i in range(self.level - 2):
+            for _ in range(self.level - 2):
                 result = result[2]
             result[2] = value
         elif self.level:
@@ -102,7 +101,7 @@ class plexpr:  # polish notation
         return self.reqexpr.stroperator
 
     def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
-#         print(self, other, self.cursor, refcur, sep='|')
+#         print(self, other, self.level, refcur, sep='|')
         if other in strexpr.operators:  # token detected
             if bovrd:  # the first operator in a pair of brackets
                 op1, op2 = 0, 1
@@ -121,14 +120,12 @@ class plexpr:  # polish notation
                     self.level -= 1
                 assert self.isEnd()
                 self.reqexpr = plexpr(other, copy(self.reqexpr), None)
-        elif other in strexpr.tokens:  # separable tokens
-            if other in strexpr.predeffunc:
-                self.req = plexpr(other, self.req, None)
-                self.level += 1
-            # to eliminate brackets from numbers
+        elif other in strexpr.predeffunc:
+            self.req = plexpr(other, self.req, None)
+            self.level += 1
         elif other[0].isalpha():
             self.req = other
-        else:  # number detected
+        elif other not in strexpr.brackets:  # number detected
             self.req = int(other) if other.isnumeric() else float(other)
 
     @classmethod
@@ -206,8 +203,9 @@ class plexpr:  # polish notation
 
 class strexpr:
     """
-    A unique sturcture (to be written in C++) for math
-    expression.
+    A unique sturcture (to be cythonized) for math
+    expressions which converts a string to polish
+    notation stored in its final attribute.
     Supports four elementary arithmetic operations and
     trigonometric, hyperbolic and logarithm functions.
 
@@ -217,25 +215,23 @@ class strexpr:
                   'sinh', 'cosh', 'tanh',
                   'ln', 'sqrt'}
     predeffunc = {_func + '(' for _func in predeffunc}
-    Lbrackets = ['(', '[', '{']
-    Rbrackets = [')', ']', '{']
-    bracketsmap = dict(zip(Lbrackets, Rbrackets))
+    Lbrackets = {'(', '[', '{'}
+    Rbrackets = {')', ']', '{'}
+    brackets = Lbrackets | Rbrackets
     operators = {'-', '+', '*', '/', '^', ' '}
     priority = dict(zip(['-', '+', '*', ' ', '/', '^'],
                         [1, 1, 2, 2, 2, 3]))
-    tokens = set(operators) | predeffunc | set(Lbrackets) | set(Rbrackets)
-    # PENDING = None
+    tokens = operators | predeffunc | brackets
 
-    ACtrie = AhoCorasick.ACProcessor(tokens, reduced=True)
+    ACtrie = ACProcessor(tokens, reduced=True)
 
     def __init__(self, _str, params=None):
         self.str = _str
         self.expr = None
         self.params = params
         self.requesting = []
-        self.preprocess()
-        self.final = plexpr('+', 0, None)  # error-prone
-        self.process(self.cut())
+        self.final = plexpr('+', 0, None)
+        self.process(self.preprocess())
         # should mark innermost level here
 #         print(self.final)
 
@@ -243,69 +239,73 @@ class strexpr:
         counter = strexpr.ACtrie(self.str)
         self.expr = strexpr.ACtrie.record
 
-        if counter['('] + sum(counter[i] for i in strexpr.predeffunc) - strexpr.ACtrie.counter[')']:
+        if sum(counter[i] for i in strexpr.predeffunc | strexpr.Lbrackets) - strexpr.ACtrie.counter[')']:
             raise SyntaxError('Inconsistent brackets')
 
-#         self.bs = self.matchbrackets()  # bracket structure
+        self.cut()
+
+        # generate token mapping (mark token priority with their position)
+        _T = {i[0]: strexpr.priority[i[1]] for i in enumerate(self.tokenchain)
+              if i[1] in strexpr.operators | strexpr.predeffunc}
+        # sort _T by key
+        _O = odict(sorted(_T.items()))
+        # process the raw mapping (naive method)
+        # find adjacent redirect of backspace as to verify permission
+        _R = {}
+        for i in reversed(_O):
+            for j in reversed(_O):
+                if j < i and _O[j] is _O[i]:
+                    _R[i] = j
+        return _T, _O, _R
 
     def cut(self):
         tokens = [pos for key in self.expr.values() for pos in key]
         tokens.extend([pos + len(key) for key in self.expr for pos in self.expr[key]])
         tokens.sort()
         tokens = [0] + tokens + [len(self.str)]
-        return [self.str[x:y] for x, y in zip(tokens, tokens[1:]) if y != x]
+        self.tokenchain = [self.str[x:y] for x, y in zip(tokens, tokens[1:]) if y != x]
 
-    def process(self, list):
-        # generate token mapping
-        _T = {i[0]: strexpr.priority[i[1]] for i in enumerate(list)
-              if i[1] in strexpr.tokens}
-        _O = odict(sorted(_T.items()))
-        # process the raw mapping (naive method)
-        _R = {}
-        for i in reversed(_O):
-            for j in reversed(_O):
-                if j < i and _O[j] is _O[i]:
-                    _R[i] = j
+    def bsovrdperm(self, index, _T, _O):
+        for i in range(_O[index], index):
+            if i in _O and _T[i] < _T[index]:
+                return True
+        return False
+
+    def process(self, TORtuple):
+        # TODO: rename to improve readablity
+        _T, _O, _R = TORtuple
+        _list = self.tokenchain
         # preprocess not well-behaved strings
-        if list[0] in ('-', '+'):
+        if _list[0] in ('-', '+'):
             self.process(['0'] + self.cut())
-        else:
-        # main process goes here
+        else:  # main process goes here
             refop = []
-            refcur = []
-            opreq = False  # whether to request the first operator in brackets
+            reflevel = []
+            opreq = False  # mark to request the first operator in brackets
             bsovrd = False
-            for index, token in enumerate(list):
-                if token in strexpr.operators:
-                    if opreq:
-                        opreq = 2
+            for index, token in enumerate(_list):
+                if opreq and token in strexpr.operators:
+                    opreq = 2
                 if token is '(':
                     refop.append(self.final.reqexprop)
-                    refcur.append(copy(self.final.cursor))
+                    reflevel.append(self.final.level)
                     opreq = True
                 elif token[-1] is '(':
                     # built-in func detected
                     # built-in func itself create a level in plexpr
-                    # add another level in refcur
+                    # add another level in reflevel
                     refop.append(self.final.reqexprop)
-                    refcur.append(copy(self.final.cursor) + [2])
+                    reflevel.append(self.final.level + [2])
                     opreq = True
-
                 # handle backspace exception
-
-                def bsovrdperm(index):
-                    for i in range(_O[index], index):
-                        if i in _O and _T[i] < _T[index]:
-                            return True
-                    return False
-
-                if index not in _R or bsovrdperm(index):
+                if index not in _R or self.bsovrdperm(index, _T, _O):
                     bsovrd = True
                 self.final.append(token,
                                   refop.pop(-1) if refop else None,
                                   opreq,
-                                  refcur[-1] if refcur else [],
+                                  reflevel[-1] if reflevel else [],
                                   bsovrd)
+
                 if bsovrd:
                     bsovrd = False
                 if opreq is 2:
@@ -313,25 +313,8 @@ class strexpr:
                 if token in strexpr.operators:
                     refop.append(token)
                 if token is ')':
-                    self.final.cursor = refcur.pop(-1)
+                    self.final.level = reflevel.pop(-1)
 #             self.final = plexpr.simplify(self.final)
-
-#     def matchbrackets(self):
-#         Lindices, Rindices = list(self.expr['(']), list(self.expr[')'])
-#         Lindices.sort()
-#         Rindices.sort()
-#         record = {i: 0 for i in Lindices}
-#         for i in Lindices:
-#             for j in enumerate(Rindices):
-#                 if j[1] > i:
-#                     if record[i]:
-#                         record[i] = Rindices[record[i][0] + 1]
-#                         record[i] = j
-#                     else:
-#                         record[i] = j
-#                         break
-#         record = {i: record[i][1] for i in record}
-#         return record
 
     def __call__(self, valuedict={}):
         valuedict.update({'Pi': math.pi, 'e': math.e})
@@ -385,19 +368,18 @@ def findlevel(expr: plexpr, level: int):
         try:
             expr.get(i)
             yield i
-        except (TypeError, IndexError):  # indexerror for str
+        except (TypeError, IndexError):  # indexerror for symbolic variables
             pass
 
 if __name__ == '__main__':
 #     from math import isclose
     while True:
         try:
-#             expr = input('>>> ')
-#             se = strexpr(expr)
-#             plexpr.simplify(se.final)
+            expr = input('>>> ')
+            se = strexpr(expr)
+            plexpr.simplify(se.final)
 #             print(isclose(se(), eval(expr.replace('^', '**'))), se.final)
-#             print(se())
-            print(bool(relexpr(input('>>> '))))
+            print(se.final)
         except SyntaxError:
             print('Unbalanced Brackets')
 #         except KeyboardInterrupt:

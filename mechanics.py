@@ -4,7 +4,6 @@ from phycomath import linalg, genmath
 import geom
 from __init__ import G, epsilon0
 from math import pi
-from error import UnderConstruction
 from string import Template
 
 

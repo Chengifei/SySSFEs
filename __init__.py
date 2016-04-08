@@ -1,10 +1,11 @@
-from error import UncompatibleEnvironment
-import sys
+from error import IncompatibleEnvironment
 
 
 def envCheck():
-    if not (sys.version_info.major == 3 and sys.version_info.minor >= 5):
-        raise UncompatibleEnvironment
+    import sys
+    if not (sys.version_info.major >= 3 and sys.version_info.minor >= 5):
+        raise IncompatibleEnvironment('Phyco requires at least Python 3.5')
+    del sys
 
 c = 299792458
 G = 6.674 * 10 ** -11

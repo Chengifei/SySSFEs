@@ -8,11 +8,12 @@ For help of specific command refer to themselves.
 
 """
 from __future__ import generator_stop
-import re
+# import re
 import sys
 from code import InteractiveConsole
 from error import UnderConstruction
 from AhoCorasick import ACtrie
+from __init__ import envCheck
 
 sys.ps1 = 'Phyco >'
 warn = sys.stderr.write
@@ -28,11 +29,11 @@ class Interpreter(ic):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
-        self.aliastrie = ACtrie({})
+        self.aliastrie = ACtrie({'vector'})
         self.aliasstatus = False
         self.pool = []
         ic.push(self, 'import mechanics, sim')
-        ic.push(self, 'from phycomath import linalg;from phycomath.genmath import strexpr')
+        ic.push(self, 'from phycomath import linalg')
         self.localcopy = list(self.locals)
 
     def push(self, lines):
@@ -215,5 +216,6 @@ class Interpreter(ic):
                 return False
 
 if __name__ == '__main__':
+    envCheck()
     PHYCO = Interpreter()
     PHYCO.interact('PhycoE v0.0.0')
