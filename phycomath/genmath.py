@@ -46,8 +46,8 @@ class plexpr:  # polish notation
     def isEnd(self):
         # recursive code need optimization
         result = self
-        for i in self.cursor:
-            result = result[i]
+        for i in range(self.level):
+            result = result[2]
         if type(result) is plexpr:
             i = 2
             while result is not None:
@@ -129,7 +129,7 @@ class plexpr:  # polish notation
             self.req = int(other) if other.isnumeric() else float(other)
 
     @classmethod
-    def simplify(cls, expr):
+    def simplify(cls, expr, permissive=False):
         for L in range(getlevel(expr), 0, -1):
             bottoms = findlevel(expr, L)
             bottoms = {_cur[:-1] for _cur in bottoms}
@@ -147,6 +147,10 @@ class plexpr:  # polish notation
                             expr.set(i, subexpr[2] if subexpr[2] else subexpr[1])
                     elif subexpr[0] is '*' and (subexpr[1] is 1 or subexpr[2] is 1):
                             expr.set(i, subexpr[2] if subexpr[1] is 1 else subexpr[1])
+                if permissive:
+                    if typeset <= {int, float, str}:
+                        if subexpr[1] is 0 or subexpr[2] is 0:
+                            pass
         return expr
 
     def __add__(self, other):
