@@ -3,12 +3,26 @@
 from AhoCorasick import ACProcessor
 from error import UnspecifiedVariable, MathError
 import math
-# import abc
 from itertools import product as cartesian
 from collections import OrderedDict as odict
 from string import Template
 from operator import add, sub, mul, truediv
 from copy import deepcopy as copy
+
+
+class operator():
+    """Base class for all kinds of operators.
+
+    This will not be in use soon.
+
+    """
+    __slots__ = ('priority', 'commutable', 'associative', 'linear')
+
+    def __init__(self, priority, commutable, associative, linear):
+        self.priority = priority
+        self.commutable = commutable
+        self.associative = associative
+        self.linear = linear
 
 
 class plexpr:  # polish notation
@@ -100,13 +114,17 @@ class plexpr:  # polish notation
     def reqexprop(self):  # return the immediate opearator of the req
         return self.reqexpr.stroperator
 
-    def append(self, other, refop=None, bovrd=False, refcur=[], bsovrd=False):
-#         print(self, other, self.level, refcur, sep='|')
+    def append(self, other, refop=None, bovrd=False, reflevel=0, bsovrd=False):
+#         print(self, other, self.level, reflevel, sep='|')
         if other in strexpr.operators:  # token detected
             if bovrd:  # the first operator in a pair of brackets
                 op1, op2 = 0, 1
             else:
-                op1 = strexpr.priority[refop if refop else self.reqexprop]
+                # TODO: improve to decently handle built-in functions
+                try:
+                    op1 = strexpr.priority[refop if refop else self.reqexprop]
+                except KeyError:
+                    op1 = 0
                 op2 = strexpr.priority[other]
             if op1 < op2:
                 # the appending operator has higher priority
@@ -116,7 +134,7 @@ class plexpr:  # polish notation
                 self.level += 1
             else:
                 # the appeding operator has lower priotity
-                if op2 < op1 and not bsovrd and self.level > len(refcur) + 1:
+                if op2 < op1 and not bsovrd and self.level > reflevel + 1:
                     self.level -= 1
                 assert self.isEnd()
                 self.reqexpr = plexpr(other, copy(self.reqexpr), None)
@@ -129,11 +147,14 @@ class plexpr:  # polish notation
             self.req = int(other) if other.isnumeric() else float(other)
 
     @classmethod
+    # TODO: to be pass-by-reference or value?
     def simplify(cls, expr, permissive=False):
         for L in range(getlevel(expr), 0, -1):
             bottoms = findlevel(expr, L)
             bottoms = {_cur[:-1] for _cur in bottoms}
             for i in bottoms:
+                # TODO: implement a class for rules of simplification
+                # TODO: division as inverse of multiplication
                 subexpr = expr.get(i)
                 typeset = {type(subexpr[1]), type(subexpr[2])}
                 if typeset <= {int, float, str}:
@@ -218,14 +239,15 @@ class strexpr:
                   'csc', 'sec', 'cot',
                   'sinh', 'cosh', 'tanh',
                   'ln', 'sqrt'}
-    predeffunc = {_func + '(' for _func in predeffunc}
+#     predeffunc = {_func + '(' for _func in predeffunc}
     Lbrackets = {'(', '[', '{'}
     Rbrackets = {')', ']', '{'}
     brackets = Lbrackets | Rbrackets
+    # TODO: add space support between vars
     operators = {'-', '+', '*', '/', '^', ' '}
     priority = dict(zip(['-', '+', '*', ' ', '/', '^'],
                         [1, 1, 2, 2, 2, 3]))
-    tokens = operators | predeffunc | brackets
+    tokens = operators | brackets
 
     ACtrie = ACProcessor(tokens, reduced=True)
 
@@ -243,13 +265,13 @@ class strexpr:
         counter = strexpr.ACtrie(self.str)
         self.expr = strexpr.ACtrie.record
 
-        if sum(counter[i] for i in strexpr.predeffunc | strexpr.Lbrackets) - strexpr.ACtrie.counter[')']:
+        if sum(counter[i] for i in strexpr.Lbrackets) - strexpr.ACtrie.counter[')']:
             raise SyntaxError('Inconsistent brackets')
 
         self.cut()
 
         # generate token mapping (mark token priority with their position)
-        _T = {i[0]: strexpr.priority[i[1]] for i in enumerate(self.tokenchain)
+        _T = {i[0]: strexpr.priority.get(i[1], 4) for i in enumerate(self.tokenchain)
               if i[1] in strexpr.operators | strexpr.predeffunc}
         # sort _T by key
         _O = odict(sorted(_T.items()))
@@ -276,7 +298,7 @@ class strexpr:
         return False
 
     def process(self, TORtuple):
-        # TODO: rename to improve readablity
+        # TODO: rename _T,_O,_R to improve readablity
         _T, _O, _R = TORtuple
         _list = self.tokenchain
         # preprocess not well-behaved strings
@@ -288,6 +310,7 @@ class strexpr:
             opreq = False  # mark to request the first operator in brackets
             bsovrd = False
             for index, token in enumerate(_list):
+                # TODO: to accept something like tan^2(x)
                 if opreq and token in strexpr.operators:
                     opreq = 2
                 if token is '(':
@@ -299,7 +322,7 @@ class strexpr:
                     # built-in func itself create a level in plexpr
                     # add another level in reflevel
                     refop.append(self.final.reqexprop)
-                    reflevel.append(self.final.level + [2])
+                    reflevel.append(self.final.level + 2)
                     opreq = True
                 # handle backspace exception
                 if index not in _R or self.bsovrdperm(index, _T, _O):
