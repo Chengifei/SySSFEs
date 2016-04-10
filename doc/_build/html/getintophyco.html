@@ -153,11 +153,15 @@
 </div>
 <div class="section" id="something-to-know-about-phyco">
 <h2>Something to know about Phyco~<a class="headerlink" href="#something-to-know-about-phyco" title="Permalink to this headline">¶</a></h2>
-<p>Phyco is originally written in Python 3.4 and diverted to 3.5, and is reforming to integrate C++ extensions for better performance.</p>
+<p>Phyco is originally written in Python 3.4 and diverted to 3.5, and have integrated some C extensions for better performance.</p>
 <p>Written in Python, Phyco generally inherits Python PEP 20 and some other spirits and mottos of Python, and is highly Object-Oriented. Besides, Phyco takes flexiblity as the first. Using Phyco do not require
 knowledge in programming (Ugh, little maybe), but there&#8217;s a few conventions or terms used in this document that would be confusing if without Python background.</p>
+<div class="admonition seealso">
+<p class="first admonition-title">See also</p>
+<p class="last"><a class="reference external" href="./terms.html">Terms and special syntaxes</a></p>
+</div>
 <ul>
-<li><p class="first">Unlike much programming language, Phyco allows you aliasing which might be opposite to</p>
+<li><p class="first">Phyco allows you aliasing which might be opposite to</p>
 <blockquote>
 <div><p>There should be one&#8211; and preferably only one &#8211;obvious way to do it.</p>
 </div></blockquote>
@@ -180,7 +184,7 @@ knowledge in programming (Ugh, little maybe), but there&#8217;s a few convention
 <h2>Phyco Structure<a class="headerlink" href="#phyco-structure" title="Permalink to this headline">¶</a></h2>
 <p>The top level of Phyco (User Interface, UI) is command line (shell), which you use to send command. A valid Phyco command can have <strong>only one</strong> verb which <strong>must</strong> be at the beginning. Knowing this is enough to use Phyco, but you&#8217;re welcomed to be curious about what will be done inside Phyco. (You&#8217;re recommended to try using Phyco before seeing the following.)</p>
 <p>Every input of yours are firstly translated to python code. (This is not so good though.) Any Object you created are stored in a <code class="docutils literal"><span class="pre">dict</span></code>. You may have tried to either set a property of an object or create an object with a property embeded in initially. This is achieved by setting attributes of your object.</p>
-<p>As you start a <code class="docutils literal"><span class="pre">sim</span></code>, a lot of things are done, and this might be the core of Phyco. <code class="docutils literal"><span class="pre">pass</span></code>!</p>
+<p>As you start a <code class="docutils literal"><span class="pre">sim</span></code>, Phyco does a lot of computation, and this is the core of Phyco.</p>
 </div>
 <div class="section" id="types-in-phyco">
 <h2>Types in Phyco<a class="headerlink" href="#types-in-phyco" title="Permalink to this headline">¶</a></h2>
