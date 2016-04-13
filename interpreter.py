@@ -34,6 +34,7 @@ class Interpreter(ic):
         self.pool = []
         ic.push(self, 'import mechanics, sim')
         ic.push(self, 'from phycomath import linalg')
+        ic.push(self, 'vector=linalg.vector')
         self.localcopy = list(self.locals)
 
     def push(self, lines):
