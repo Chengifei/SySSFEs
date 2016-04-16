@@ -10,28 +10,74 @@ from operator import add, sub, mul, truediv
 from copy import deepcopy as copy
 
 
-class operator():
+class operator:
     """Base class for all kinds of operators.
-
-    This will not be in use soon.
-
     """
-    __slots__ = ('priority', 'commutable', 'associative', 'linear')
+    __slots__ = ('proc', 'priority', 'alt')
 
-    def __init__(self, priority, commutable, associative, linear):
+    def __init__(self, proc, priority, equivalent={}):
+        self.proc = proc
         self.priority = priority
-        self.commutable = commutable
-        self.associative = associative
-        self.linear = linear
+        self.alt = equivalent
 
+    def __call__(self, *args):
+        return self.proc(*args)
+
+OP_PLUS = operator(add, 1, {lambda expr:
+                            plexpr(arg1=expr.arg2, arg2=expr.arg1)})
+OP_MINUS = operator(sub, 1)
+OP_MUL = operator(mul, 2, {lambda expr:
+                           plexpr('*', arg1=expr.arg2, arg2=expr.arg1)})
+OP_SPACE_MUL = operator(mul, 2)
+OP_DIV = operator(truediv, 2)
+OP_POW = operator(pow, 3)
+
+
+class RewritingRule:
+
+    def __init__(self, op, cond, reduceto):
+        self.cond = cond
+        self.reduceto = reduceto
+
+    def verify(self, expr):
+        try:
+            return self.cond(expr)
+        except:
+            return False
+
+    def rewrite(self, expr):
+        return self.reduceto(expr)
+
+# ----------------------------------------------------------------------------
+# DEFINE REWRITING RULES HERE
+# The following lines use RR as abbreviation to rewriting rule.
+RR_PLUS_0 = RewritingRule('+', lambda expr: 0 in (expr[1], expr[2]),
+                          lambda expr:
+                          expr[1] if expr[1] else expr[2])
+RR_MUL_0 = RewritingRule('*', lambda expr: 0 in (expr[1], expr[2]),
+                         lambda expr: 0)
+RR_MUL_1 = RewritingRule('*', lambda expr: 1 in (expr[1], expr[2]),
+                         lambda expr:
+                         expr[2] if expr[1] is 1 else expr[1])
+RR_MUL_TOPOW = RewritingRule('*', lambda expr: expr[1] is expr[2],
+                             lambda expr:
+                             plexpr('^', expr[1], 2))
+RR_MUL_POW = RewritingRule('*', lambda expr: expr[1] is expr[2][1],
+                           lambda expr:
+                           plexpr('^', expr[1], expr[2][2] + 1))
+RR_DIV_MUL = None
+RR_DICT = {'+': {RR_PLUS_0},
+           '*': {RR_MUL_0, RR_MUL_1, RR_MUL_TOPOW},
+           '/': {}}
+# ----------------------------------------------------------------------------
 
 class plexpr:  # polish notation
 
     output = Template('${op}(${arg1}, ${arg2})')
     opfuncmap = {'+': add, '-': sub, '*': mul, '/': truediv, '^': pow,
-                 'sin(': math.sin, 'cos(': math.cos, 'tan(': math.tan,
-                 'sinh(': math.sinh, 'cosh(': math.cosh, 'tanh(': math.tanh,
-                 'ln(': math.log, 'sqrt(': math.sqrt}
+                 'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
+                 'sinh': math.sinh, 'cosh': math.cosh, 'tanh': math.tanh,
+                 'ln': math.log, 'sqrt': math.sqrt}
 
     def __init__(self, operator='+', arg1=0, arg2=0):
 
@@ -138,7 +184,7 @@ class plexpr:  # polish notation
                     self.level -= 1
                 assert self.isEnd()
                 self.reqexpr = plexpr(other, copy(self.reqexpr), None)
-        elif other in strexpr.predeffunc:
+        elif other in strexpr.PREDEFFUNC:
             self.req = plexpr(other, self.req, None)
             self.level += 1
         elif other[0].isalpha():
@@ -149,29 +195,25 @@ class plexpr:  # polish notation
     @classmethod
     # TODO: to be pass-by-reference or value?
     def simplify(cls, expr, permissive=False):
-        for L in range(getlevel(expr), 0, -1):
-            bottoms = findlevel(expr, L)
+        for L in range(get_level(expr), 0, -1):
+            bottoms = find_level(expr, L)
             bottoms = {_cur[:-1] for _cur in bottoms}
             for i in bottoms:
-                # TODO: implement a class for rules of simplification
                 # TODO: division as inverse of multiplication
                 subexpr = expr.get(i)
                 typeset = {type(subexpr[1]), type(subexpr[2])}
-                if typeset <= {int, float, str}:
-                    if str not in typeset:
-                        expr.set(i, subexpr())
-                elif typeset <= {int, float, str, plexpr}:
-                    if subexpr[1] is 0 or subexpr[2] is 0:
-                        if subexpr[0] is '*':
-                            expr.set(i, 0)
-                        elif expr[0] is '+':
-                            expr.set(i, subexpr[2] if subexpr[2] else subexpr[1])
-                    elif subexpr[0] is '*' and (subexpr[1] is 1 or subexpr[2] is 1):
-                            expr.set(i, subexpr[2] if subexpr[1] is 1 else subexpr[1])
-                if permissive:
-                    if typeset <= {int, float, str}:
-                        if subexpr[1] is 0 or subexpr[2] is 0:
-                            pass
+                if typeset <= {int, float}:
+                    expr.set(i, subexpr())
+                elif type(None) not in typeset:  # not a predeffunc
+                    for RR in RR_DICT[subexpr.stroperator]:
+                        if RR.verify(subexpr):
+                            expr.set(i, RR.rewrite(subexpr))
+                            break
+                        for alt in strexpr.OP_MAP[subexpr.stroperator].alt:
+                            if RR.verify(alt(subexpr)):
+                                expr.set(i, RR.rewrite(subexpr))
+                    if permissive:
+                        pass
         return expr
 
     def __add__(self, other):
@@ -235,16 +277,16 @@ class strexpr:
     trigonometric, hyperbolic and logarithm functions.
 
     """
-    predeffunc = {'sin', 'cos', 'tan',
+    PREDEFFUNC = {'sin', 'cos', 'tan',
                   'csc', 'sec', 'cot',
                   'sinh', 'cosh', 'tanh',
                   'ln', 'sqrt'}
-#     predeffunc = {_func + '(' for _func in predeffunc}
     Lbrackets = {'(', '[', '{'}
     Rbrackets = {')', ']', '{'}
     brackets = Lbrackets | Rbrackets
-    # TODO: add space support between vars
+    # TODO: add space support between vars (re?)
     operators = {'-', '+', '*', '/', '^', ' '}
+    OP_MAP = {'+': OP_PLUS, '*': OP_MUL}
     priority = dict(zip(['-', '+', '*', ' ', '/', '^'],
                         [1, 1, 2, 2, 2, 3]))
     tokens = operators | brackets
@@ -265,14 +307,15 @@ class strexpr:
         counter = strexpr.ACtrie(self.str)
         self.expr = strexpr.ACtrie.record
 
-        if sum(counter[i] for i in strexpr.Lbrackets) - strexpr.ACtrie.counter[')']:
+        if sum(counter[i] for i in strexpr.Lbrackets) is not counter[')']:
             raise SyntaxError('Inconsistent brackets')
 
         self.cut()
 
         # generate token mapping (mark token priority with their position)
-        _T = {i[0]: strexpr.priority.get(i[1], 4) for i in enumerate(self.tokenchain)
-              if i[1] in strexpr.operators | strexpr.predeffunc}
+        _T = {i[0]: strexpr.priority.get(i[1], 4)
+              for i in enumerate(self.tokenchain)
+              if i[1] in strexpr.operators | strexpr.PREDEFFUNC}
         # sort _T by key
         _O = odict(sorted(_T.items()))
         # process the raw mapping (naive method)
@@ -286,10 +329,13 @@ class strexpr:
 
     def cut(self):
         tokens = [pos for key in self.expr.values() for pos in key]
-        tokens.extend([pos + len(key) for key in self.expr for pos in self.expr[key]])
+        tokens.extend([pos + len(key)
+                       for key in self.expr
+                       for pos in self.expr[key]])
         tokens.sort()
         tokens = [0] + tokens + [len(self.str)]
-        self.tokenchain = [self.str[x:y] for x, y in zip(tokens, tokens[1:]) if y != x]
+        self.tokenchain = [self.str[x:y]
+                           for x, y in zip(tokens, tokens[1:]) if y != x]
 
     def bsovrdperm(self, index, _T, _O):
         for i in range(_O[index], index):
@@ -375,7 +421,7 @@ class relexpr():
         return self.l(self.values) == self.r(self.values)
 
 
-def getlevel(expr: plexpr):
+def get_level(expr: plexpr):
     string = repr(expr)  # reverse a plexpr to usual expression
     blevel = 0
     result = {}
@@ -388,14 +434,14 @@ def getlevel(expr: plexpr):
     return max(result.values())
 
 
-def findlevel(expr: plexpr, level: int):
+def find_level(expr: plexpr, level: int):
     # enumerate!
     possibilities = cartesian((1, 2), repeat=level)
     for i in possibilities:
         try:
             expr.get(i)
             yield i
-        except (TypeError, IndexError):  # indexerror for symbolic variables
+        except (TypeError, IndexError):  # IndexError for symbolic variables
             pass
 
 if __name__ == '__main__':
@@ -404,11 +450,9 @@ if __name__ == '__main__':
         try:
             expr = input('>>> ')
             se = strexpr(expr)
+            print(se.final)
             plexpr.simplify(se.final)
 #             print(isclose(se(), eval(expr.replace('^', '**'))), se.final)
             print(se.final)
         except SyntaxError:
             print('Unbalanced Brackets')
-#         except KeyboardInterrupt:
-#             from sys import exit
-#             exit(0)

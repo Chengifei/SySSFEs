@@ -12,8 +12,9 @@ from __future__ import generator_stop
 import sys
 from code import InteractiveConsole
 from error import UnderConstruction
-from AhoCorasick import ACtrie
+from AhoCorasick import ACProcessor as ACtrie
 from __init__ import envCheck
+from pdb import set_trace
 
 sys.ps1 = 'Phyco >'
 warn = sys.stderr.write
@@ -29,7 +30,7 @@ class Interpreter(ic):
         ic.__init__(self)
         self.assigned = {}
         self.params = set()
-        self.aliastrie = ACtrie({'vector'})
+        self.aliastrie = ACtrie({}, reduced=True)
         self.aliasstatus = False
         self.pool = []
         ic.push(self, 'import mechanics, sim')
@@ -42,18 +43,20 @@ class Interpreter(ic):
         self.pool = [_line for _line in self.pool if _line]
         for line in self.pool:
             try:
-                A = self.__lexer(line)
+                pyline = self.__lexer(line)
                 if self.aliasstatus:
-                    A = self.__translate(A)
-            except:
+                    pyline = self.__translate(pyline)
+            except Exception as e1:
                 try:
-                    warn('Wrong Syntax: %s\n' % A)
-                except:
+                    warn('Wrong Syntax: %s\n' % pyline)
+                    print(e1)
+                except Exception as e2:
                     warn('Wrong Syntax due to unknown error\n')
+                    print(e2)
                 finally:
-                    A = ''
+                    pyline = ''
 
-            ic.push(self, A)
+            ic.push(self, pyline)
 
     def __lexer(self, line):
         """Raw command processor
@@ -63,27 +66,28 @@ class Interpreter(ic):
 
         """
         self.gen = (i for i in line.split())
-        current = next(self.gen)
-        if current == 'p':
+        command = next(self.gen)
+        if command == 'p':
             return ' '.join(self.gen)
-        elif current in {'create', 'c'}:
+        elif command in {'create', 'new'}:
             return self.create(self.gen)
-        elif current in {'plot'}:
+        elif command in {'plot'}:
             self.plot(self.gen)
-        elif current in {'set', 's'}:
+        elif command in {'set', 's'}:
             return self.set(self.gen)
-        elif current == 'start':
+        elif command == 'start':
             return self.start(self.gen)
-        elif current == 'print':
+        elif command == 'print':
             return self.print(self.gen)
-        elif current == 'list':
+        elif command == 'list':
             return self.list(self.gen)
-        elif current == 'alias':
+        elif command == 'alias':
             return self.alias(self.gen)
-        elif current in {'delete', 'd', 'del'}:
+        elif command in {'delete', 'd', 'del'}:
             return self.delete(self.gen)
-        elif current in {'help', 'h'}:
+        elif command in {'help', 'h'}:
             return self.help(self.gen)
+        return ''
 
     def create(self, line):
         """create type _name [attribname attrib [...]]
@@ -119,9 +123,6 @@ class Interpreter(ic):
                                  module=self.moduledict[Type], arg=Arg) + ';'
 
         return B
-
-    def assign(self, objdict):
-        self.assigned.update(objdict)
 
     def plot(self, line):
         '''plot x y sizetuple
@@ -184,7 +185,10 @@ class Interpreter(ic):
 
     def alias(self, line):
         for _eqn in line:
-            self.aliastrie.add(_eqn)
+            _eqn = _eqn.split('=')
+            _ = set(self.aliastrie.patterns)
+            _.add(_eqn[0])
+            self.aliastrie = ACtrie(_, reduced=True)
         self.aliasstatus = True
         return ''
 
@@ -205,7 +209,9 @@ class Interpreter(ic):
         return ''
 
     def __translate(self, line):
-        pass
+        self.aliastrie(line)
+        print(self.aliastrie.record)
+        return ''
 
     def __confirm(self):
         while True:

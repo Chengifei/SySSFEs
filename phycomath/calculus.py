@@ -10,7 +10,7 @@ from phyco.error import UnderConstruction
 
 def diff(expr: plexpr, var: str):
 
-    # these should be contained in a class
+    # these should be in a class
     def dadd(expr, var):
         return plexpr('+', diff(expr[1], var), diff(expr[2], var))
 
