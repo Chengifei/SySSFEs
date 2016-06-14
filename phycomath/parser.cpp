@@ -195,20 +195,40 @@ bool isalpha(string str) {
 	static const char high = 'z';
 	static const char HIGH = 'Z';
 	for (char i : str) {
-		if ((i > low and i < high) or (i > LOW and i < HIGH))
+		if ((i >= low and i <= high) or (i >= LOW and i <= HIGH))
 			return true;
 	}
 	return false;
 }
 
-bool isdouble(string str) {
+//There are strong evidence that shows manually written function are
+//dramatically faster than it by regex.
+int isdouble(string str) {
 	static const char low = '0';
 	static const char high = '9';
-	for (auto i : str) {
-		if (i == '.' or (low < i and i < high))
-			return true;
+	int mark = 0;
+	bool ret = true;
+	if (str.back() != '.') {
+		for (char i : str) {
+			if (low <= i and i <= high) {
+			} else {
+				if (i == '.') {
+					mark++;
+				} else {
+					ret = false;
+					break;
+				}
+			}
+		}
 	}
-	return false;
+	if (mark == 1) {
+		return ret;
+	} else {
+		if (mark == 0 and ret) {
+			return 2;
+		} else
+			return false;
+	}
 }
 
 namespace math {
@@ -255,19 +275,19 @@ const Op PLU_OP("+", 1, &funcs::plus);
 const Op MIN_OP("-", 1, &funcs::minus);
 const Op MUL_OP("*", 2, &funcs::mul);
 const Op DIV_OP("/", 2, &funcs::div);
+const Op POW_OP("^", 3, &pow);
 
 typedef std::unordered_map<string, Op> Opdict;
 
 const Opdict opdict { { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, { "/",
-		DIV_OP } };
+		DIV_OP }, { "^", POW_OP } };
 }
 
 class bracketstack { // no guard against impaired brackets
-	const bool Lbracket = 0;
-	const bool Rbracket = 1;
+	const std::unordered_map<string, bool> bdict { { "(", 1 }, { ")", 0 } };
 	unsigned Lcount;
-	void append(bool LR) {
-		if (LR == Rbracket)
+	void append(string bracket) {
+		if (bracket == ")")
 			Lcount--;
 		else
 			Lcount++;
@@ -401,10 +421,14 @@ void plexpr::append(Op& op) {
 }
 
 void plexpr::append(string str) {
-	if (isdouble(str)) {
-		this->append(std::stoi(str));
+	int i = isdouble(str);
+	if (i == 1) {
+		this->append(std::stod(str));
 	} else {
-		this->append(const_cast<Op&>(operators::opdict.at(str)));
+		if (i == 2)
+			this->append(std::stoi(str));
+		else
+			this->append(const_cast<Op&>(operators::opdict.at(str)));
 	}
 }
 
