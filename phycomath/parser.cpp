@@ -5,16 +5,19 @@
  */
 //#define PY_EXT
 #ifdef PY_EXT
-#warning Python extension interface are not fully supported and tested
-#warning There are known issue that the program cannot be linked on Windows (as tested on Win7 x64)
-#warning If anyone here succeeded to link it to a usable pyd, please notify the author
+#warning Python extension interface are not fully supported and tested\
+ There are known issue that the program cannot be linked on Windows (as tested on Win7 x64)
+#warning If anyone here succeeded to link it to a usable pyd, please notify the author.
+#warning It seems that it's because Python from executable installer are compiled \
+with MSVC compiler, and MinGW compiler wouldn't have access to its dynamic-library
 #endif
 #define PHYCO_MATH
 #include <unordered_set>
 #include <string>
 #include <vector>
-#include <stdexcept>
+#include <queue>
 #include <unordered_map>
+#include <stdexcept>
 using std::string;
 template<class T>
 using set=std::unordered_set<T>;
@@ -24,6 +27,11 @@ using set=std::unordered_set<T>;
 #include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 #else
 #include <iostream>
+#ifdef PHYCO_DEBUG
+#include <cassert>
+#include <typeinfo>
+#include <cxxabi.h>
+#endif
 #endif
 
 class node {
@@ -246,11 +254,11 @@ struct Op {
 #ifdef PY_EXT
 	Op(PyFunctionObject func) {
 	}
-#endif
 	string repr() const {
 		return "Operator '" + this->name + "' with priority "
-				+ std::to_string(priority);
+		+ std::to_string(priority);
 	}
+#endif
 };
 
 namespace operators {
@@ -283,31 +291,36 @@ const Opdict opdict { { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, { "/",
 		DIV_OP }, { "^", POW_OP } };
 }
 
-class bracketstack { // no guard against impaired brackets
-	const std::unordered_map<string, bool> bdict { { "(", 1 }, { ")", 0 } };
-	unsigned Lcount;
-	void append(string bracket) {
-		if (bracket == ")")
-			Lcount--;
-		else
-			Lcount++;
-	}
-public:
-	void process(string str) {
-	}
-};
+//class bracketstack { // no guard against impaired brackets
+//	const std::unordered_map<string, bool> bdict { { "(", 1 }, { ")", 0 } };
+//	unsigned Lcount;
+//	void append(string bracket) {
+//		if (bracket == ")")
+//			Lcount--;
+//		else
+//			Lcount++;
+//	}
+//public:
+//	void process(string str) {
+//	}
+//};
 
 class plexpr;
 typedef boost::variant<double, int, string, plexpr*, decltype(nullptr)> Arg;
+typedef boost::variant<Arg*, Op*> req_t;
 
 struct plexpr {
 	Op op;
 	Arg arg1;
 	Arg arg2;
-	Arg* req = &arg2;
+	std::queue<req_t> reqque; //request queue
 	plexpr(Op op = operators::PLU_OP, Arg arg1 = 0, Arg arg2 = nullptr) :
 			op(op), arg1(arg1), arg2(arg2) {
+		this->reqque.push(&(this->arg1));
+		this->reqque.push(&(this->op));
+		this->reqque.push(&(this->arg2));
 	}
+	;
 	plexpr(plexpr* expr) :
 			op(expr->op), arg1(expr->arg1), arg2(expr->arg2) {
 	}
@@ -316,17 +329,39 @@ struct plexpr {
 	void append(double arg);
 	void append(Op& op);
 	void append(string str);
-};
+	void appendL();
+	void appendR() {
+	}
+}
+;
 
 namespace convert {
 
-struct getptr2req_visitor: public boost::static_visitor<Arg*> {
-	template<class T>
-	Arg* operator()(T& arg) const {
-		throw std::runtime_error("In getptr2: Cast to plexpr not allowed");
+struct get_req_ptr_visitor: public boost::static_visitor<req_t> {
+	int i;
+	get_req_ptr_visitor(int i) :
+			i(i) {
 	}
-	Arg* operator()(plexpr* arg) const {
-		return arg->req;
+	template<class T>
+	req_t operator()(T arg) const {
+#ifdef PHYCO_DEBUG
+		std::cout
+		<< abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr,
+				nullptr) << std::endl;
+#endif
+		throw std::runtime_error("In get_req_ptr: Cast to plexpr not allowed");
+	}
+	req_t operator()(plexpr* arg) const {
+		switch (this->i) {
+		case 0:
+			return &(arg->op);
+		case 1:
+			return &(arg->arg1);
+		case 2:
+			return &(arg->arg2);
+		default:
+			throw std::invalid_argument("");
+		}
 	}
 };
 
@@ -338,16 +373,16 @@ struct Arg2str_visitor: public boost::static_visitor<string> {
 		return std::to_string(arg);
 	}
 	string operator()(plexpr* arg) const {
-		return boost::apply_visitor(Arg2str_visitor(), arg->arg1) + arg->op.name
-				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2);
-//		return arg->op.name + "("
-//				+ boost::apply_visitor(Arg2str_visitor(), arg->arg1) + ", "
-//				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2) + ")";
+//		return boost::apply_visitor(Arg2str_visitor(), arg->arg1) + arg->op.name
+//				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2);
+		return arg->op.name + "("
+				+ boost::apply_visitor(Arg2str_visitor(), arg->arg1) + ", "
+				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2) + ")";
 	}
 	string operator()(string str) const {
 		return str;
 	}
-	string operator()(decltype(nullptr) invalid) const {
+	string operator()(decltype(nullptr)) const {
 		return "_";
 	}
 };
@@ -389,11 +424,22 @@ inline string expr2str(plexpr* expr) {
 	return Arg2str(expr);
 }
 
-inline Arg* getptr2req(Arg& arg) {
-	return boost::apply_visitor(getptr2req_visitor(), arg);
+inline req_t get_req_ptr(Arg& arg, int i = 2) {
+	return boost::apply_visitor(get_req_ptr_visitor(i), arg);
+}
+
+inline req_t get_req_ptr(Arg* arg, int i = 2) {
+	return boost::apply_visitor(get_req_ptr_visitor(i), *arg);
 }
 
 }
+
+//It seems this is a bad practice. Maybe will be improved later.
+//In the mean time, be sure to only use on very definite cases.
+//Also note the run-time error boost::bad_get.
+#define B_R_A(X) (boost::get<Arg*>(X)) // boost_req_t_Arg_ptr
+#define B_R_O(X) (boost::get<Op*>(X)) // boost_req_t_Op_ptr
+#define B_A_P(X) (boost::get<plexpr*>(X)) // boost_Arg_plexpr_ptr
 
 double plexpr::exec() {
 	Arg _ = this;
@@ -401,36 +447,65 @@ double plexpr::exec() {
 }
 
 void plexpr::append(int arg) {
-	*(this->req) = arg;
+	*B_R_A(this->reqque.front()) = arg;
+	this->reqque.pop();
 }
 
 void plexpr::append(double arg) {
-	*(this->req) = arg;
+	*B_R_A(this->reqque.front()) = arg;
+	this->reqque.pop();
 }
 
 void plexpr::append(Op& op) {
-	if (op.priority <= this->op.priority) {
-		this->arg1 = new plexpr(this);
-		this->arg2 = nullptr;
-		this->op = op;
-		this->req = &(this->arg2); //somewhat like flush
+	if (this->reqque.empty()) {
+		if (op.priority <= this->op.priority) {
+			this->arg1 = new plexpr(this);
+			this->arg2 = nullptr;
+			this->op = op;
+			this->reqque.push(&(this->arg2));
+		} else {
+			this->arg2 = new plexpr(op, this->arg2, nullptr);
+			this->reqque.push(convert::get_req_ptr(this->arg2));
+		}
 	} else {
-		this->arg2 = new plexpr(op, this->arg2, nullptr);
-		this->req = convert::getptr2req(this->arg2);
+		*B_R_O(this->reqque.front()) = op;
+		this->reqque.pop();
 	}
 }
 
-void plexpr::append(string str) {
-	int i = isdouble(str);
-	if (i == 1) {
-		this->append(std::stod(str));
-	} else {
-		if (i == 2)
-			this->append(std::stoi(str));
-		else
-			this->append(const_cast<Op&>(operators::opdict.at(str)));
+void plexpr::append(string str) { //sort and branch
+	if (str == "(")
+		this->appendL();
+	else {
+		if (str == "]")
+			this->appendR();
+		else {
+			int i = isdouble(str);
+			if (i == 1)
+				this->append(std::stod(str));
+			else {
+				if (i == 2)
+					this->append(std::stoi(str));
+				else
+					this->append(const_cast<Op&>(operators::opdict.at(str)));
+			}
+		}
 	}
 }
+
+void plexpr::appendL() {
+	Arg* _ = B_R_A(this->reqque.front());
+	*_ = new plexpr();
+	std::cout << convert::expr2str(this) << std::endl;
+	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 1));
+	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 0));
+	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front())));
+	this->reqque.pop();
+}
+
+#undef B_R_A
+#undef B_R_O
+#undef B_A_P
 
 plexpr parse(string str) {
 	plexpr ret { };
@@ -473,17 +548,22 @@ BOOST_PYTHON_MODULE(parser)
 
 }
 #else
+//#define EXEC_FAIL
 int main(int argc, char* argv[]) {
 	if (argc != 2)
 		throw std::runtime_error("No value given to parse.");
-	std::vector < string > oplist;
+	std::vector < string > oplist { "(", ")" };
 	for (auto i : math::operators::opdict) {
 		oplist.push_back(i.first);
 	}
 	::init (oplist);
 	math::plexpr* _ = new math::plexpr;
 	*_ = math::parse(argv[1]);
+#ifndef EXEC_FAIL
 	std::cout << math::convert::expr2str(_) << " = " << _->exec() << std::endl;
+#else
+	std::cout << math::convert::expr2str(_) << std::endl;
+#endif
 	return 0;
 }
 #endif
