@@ -15,9 +15,13 @@ with MSVC compiler, and MinGW compiler wouldn't have access to its dynamic-libra
 #include <unordered_set>
 #include <string>
 #include <vector>
-#include <queue>
 #include <unordered_map>
 #include <stdexcept>
+#ifdef PHYCO_MATH
+#include <queue>
+#include <stack>
+#include <cmath>
+#endif
 using std::string;
 template<class T>
 using set=std::unordered_set<T>;
@@ -35,6 +39,9 @@ using set=std::unordered_set<T>;
 #endif
 
 class node {
+#ifdef PHYCO_DEBUG
+public:
+#endif
 	node* parent;
 	char letter;
 	bool isroot;
@@ -50,12 +57,12 @@ public:
 	bool isend() const {
 		return this->isEnd;
 	}
-	node* appendchar(char letter, bool isEnd = false) {
+	node* appendchar(char letter) {
 		if (this->findchild(letter)) {
 			this->linkchild(this->findchild(letter));
 			return this->findchild(letter);
 		} else {
-			node* _ = new node(this, letter, isEnd);
+			node* _ = new node(this, letter);
 			this->linkchild(_);
 			return _;
 		}
@@ -90,9 +97,9 @@ public:
 
 namespace trie {
 
-const node* root = new node();
-node* current = const_cast<node*>(root);
-node* from = const_cast<node*>(root);
+node* const root = new node();
+node* current = root;
+node* from = root;
 string notfound;
 #ifdef PY_EXT
 void build(boost::python::list keywords) {
@@ -107,55 +114,57 @@ void build(boost::python::list keywords) {
 	}
 }
 #endif
-void build(std::vector<string> keywords) {
+
+void build(set<string> keywords) {
 	node* current;
 	for (auto i : keywords) {
-		current = const_cast<node*>(root);
+		current = root;
 		for (auto letter : i) {
 			current = current->appendchar(letter);
 		}
 		current->markend();
 	}
 }
+
 void reset() {
 	from = trie::current;
-	current = const_cast<node*>(root);
+	current = root;
 	notfound.clear();
 }
 bool put_in(char letter) {
 	from = current;
 	if (current->findchild(letter)) {
-		current = trie::current->findchild(letter);
+		current = current->findchild(letter);
 		return true;
 	} else {
-		current = const_cast<node*>(root);
+		current = root;
 		return false;
 	}
 }
 node* getnode(string str) {
 	trie::reset();
 	for (unsigned i = 0; i < str.size(); i++) {
-		bool r = trie::put_in(str.at(i));
-		if (r) {
+		if (!trie::put_in(str.at(i)))
 			return nullptr;
-		}
 	}
 	return trie::current;
 }
+
 }
-;
 
 std::vector<string> process(string input) {
 	trie::reset();
 	std::vector < string > ret;
 	unsigned i = 0;
 	while (i < input.size()) {
-		if (!trie::notfound.empty())
+		if (!trie::notfound.empty()) {
 			ret.push_back(trie::notfound);
-		trie::reset();
+			trie::reset();
+		}
 		if (trie::put_in(input.at(i))) {
 			if (trie::current->isend()) {
 				ret.push_back(trie::current->repr());
+				trie::reset();
 			}
 		} else {
 			do {
@@ -177,8 +186,8 @@ void init(boost::python::list keywords) {
 	trie::reset();
 }
 #else
-void init(std::vector<string> v) {
-	trie::build(v);
+void init(set<string> s) {
+	trie::build(s);
 	trie::reset();
 }
 #endif
@@ -219,37 +228,43 @@ int isdouble(string str) {
 	if (str.back() != '.') {
 		for (char i : str) {
 			if (low <= i and i <= high) {
-			} else {
-				if (i == '.') {
-					mark++;
-				} else {
-					ret = false;
-					break;
-				}
+			} else if (i == '.')
+				mark++;
+			else {
+				ret = false;
+				break;
 			}
 		}
 	}
-	if (mark == 1) {
+	if (mark == 1)
 		return ret;
-	} else {
-		if (mark == 0 and ret) {
-			return 2;
-		} else
-			return false;
-	}
+	else if (mark == 0 and ret)
+		return 2;
+	else
+		return false;
 }
 
 namespace math {
 
 struct Op {
-	typedef double (*binfunc)(double, double);
+private:
+	template<class Func>
+	auto wrapper(Func func) {
+		return [func](auto argument,auto ...) {return func(argument);};
+	}
+public:
+	typedef std::function<double(double, double)> binfunc;
+	typedef std::function<double(double)> unfunc;
 	string name;
 	unsigned priority;
 	bool infix;
 	binfunc func;
-	Op(string name, unsigned priority, binfunc func = nullptr,
-			bool infix = true) :
+	Op(string name, unsigned priority, binfunc func, bool infix = true) :
 			name(name), priority(priority), infix(infix), func(func) {
+	}
+	Op(string name, unsigned priority, unfunc func, bool infix = true) :
+			name(name), priority(priority), infix(infix) {
+		this->func = Op::wrapper(func);
 	}
 #ifdef PY_EXT
 	Op(PyFunctionObject func) {
@@ -284,28 +299,30 @@ const Op MIN_OP("-", 1, &funcs::minus);
 const Op MUL_OP("*", 2, &funcs::mul);
 const Op DIV_OP("/", 2, &funcs::div);
 const Op POW_OP("^", 3, &pow);
+const Op SIN_OP("sin", 4, &sin);
 
 typedef std::unordered_map<string, Op> Opdict;
 
-const Opdict opdict { { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, { "/",
-		DIV_OP }, { "^", POW_OP } };
+const Opdict infixdict { { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, {
+		"/", DIV_OP }, { "^", POW_OP } };
+
+const Opdict builtindict { { "sin", SIN_OP } };
+
+set<string> infixlist { "(", ")" };
+set<string> bilist { };
+
+void init() {
+	for (auto i : infixdict) {
+		infixlist.insert(i.first);
+	}
+	for (auto i : builtindict) {
+		bilist.insert(i.first);
+	}
 }
 
-//class bracketstack { // no guard against impaired brackets
-//	const std::unordered_map<string, bool> bdict { { "(", 1 }, { ")", 0 } };
-//	unsigned Lcount;
-//	void append(string bracket) {
-//		if (bracket == ")")
-//			Lcount--;
-//		else
-//			Lcount++;
-//	}
-//public:
-//	void process(string str) {
-//	}
-//};
+}
 
-class plexpr;
+struct plexpr;
 typedef boost::variant<double, int, string, plexpr*, decltype(nullptr)> Arg;
 typedef boost::variant<Arg*, Op*> req_t;
 
@@ -314,24 +331,26 @@ struct plexpr {
 	Arg arg1;
 	Arg arg2;
 	std::queue<req_t> reqque; //request queue
+	std::stack<plexpr*> brackets;
 	plexpr(Op op = operators::PLU_OP, Arg arg1 = 0, Arg arg2 = nullptr) :
 			op(op), arg1(arg1), arg2(arg2) {
-		this->reqque.push(&(this->arg1));
-		this->reqque.push(&(this->op));
+//		this->reqque.push(&(this->arg1));
+//		this->reqque.push(&(this->op));
 		this->reqque.push(&(this->arg2));
+		this->brackets.push(this);
 	}
 	;
 	plexpr(plexpr* expr) :
 			op(expr->op), arg1(expr->arg1), arg2(expr->arg2) {
 	}
 	double exec();
-	void append(int arg);
-	void append(double arg);
-	void append(Op& op);
-	void append(string str);
+	void append(int);
+	void append(double);
+	void append(Op&);
+	void append(string);
 	void appendL();
-	void appendR() {
-	}
+	void appendR();
+	void appendBi(Op&);
 }
 ;
 
@@ -412,7 +431,8 @@ struct Argexec_visitor: public boost::static_visitor<double> {
 				"Attempt to evaluate numeric result without full assignment");
 	}
 	double operator()(decltype(nullptr)) const {
-		throw std::runtime_error("Attempt to dereference void*");
+		throw std::runtime_error("Attempt to dereference void* "
+				"(HINT:Possibly incomplete expression)");
 	}
 };
 
@@ -458,48 +478,66 @@ void plexpr::append(double arg) {
 
 void plexpr::append(Op& op) {
 	if (this->reqque.empty()) {
-		if (op.priority <= this->op.priority) {
-			this->arg1 = new plexpr(this);
-			this->arg2 = nullptr;
-			this->op = op;
-			this->reqque.push(&(this->arg2));
+		if (op.priority <= this->brackets.top()->op.priority) {
+			this->brackets.top()->arg1 = new plexpr(this->brackets.top());
+			this->brackets.top()->arg2 = nullptr;
+			this->brackets.top()->op = op;
+			this->reqque.push(&(this->brackets.top()->arg2));
 		} else {
-			this->arg2 = new plexpr(op, this->arg2, nullptr);
-			this->reqque.push(convert::get_req_ptr(this->arg2));
+			this->brackets.top()->arg2 = new plexpr(op,
+					this->brackets.top()->arg2, nullptr);
+			this->reqque.push(convert::get_req_ptr(this->brackets.top()->arg2));
 		}
 	} else {
-		*B_R_O(this->reqque.front()) = op;
-		this->reqque.pop();
+		std::cout << convert::expr2str(this) << std::endl;
+		try {
+			*B_R_O(this->reqque.front()) = op;
+			this->reqque.pop();
+		} catch (boost::bad_get& e) {
+			throw std::runtime_error(
+					"Internal error: Inconsistent type for appending an operator");
+		}
 	}
 }
 
 void plexpr::append(string str) { //sort and branch
 	if (str == "(")
 		this->appendL();
+	else if (str == ")")
+		this->appendR();
 	else {
-		if (str == "]")
-			this->appendR();
-		else {
-			int i = isdouble(str);
-			if (i == 1)
-				this->append(std::stod(str));
-			else {
-				if (i == 2)
-					this->append(std::stoi(str));
-				else
-					this->append(const_cast<Op&>(operators::opdict.at(str)));
-			}
-		}
+		int i = isdouble(str);
+		if (i == 1)
+			this->append(std::stod(str));
+		else if (i == 2)
+			this->append(std::stoi(str));
+		else if (operators::infixlist.find(str) != operators::infixlist.end())
+			this->append(const_cast<Op&>(operators::infixdict.at(str)));
+		else if (operators::bilist.find(str) != operators::bilist.end()) {
+			this->appendBi(const_cast<Op&>(operators::builtindict.at(str)));
+		} else
+			throw std::runtime_error(
+					str + ": Symbolic variable not supported yet");
 	}
 }
 
 void plexpr::appendL() {
-	Arg* _ = B_R_A(this->reqque.front());
-	*_ = new plexpr();
-	std::cout << convert::expr2str(this) << std::endl;
-	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 1));
-	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 0));
+	*B_R_A(this->reqque.front()) = new plexpr();
+	this->brackets.push(
+			const_cast<plexpr*>(B_A_P(*B_R_A(this->reqque.front()))));
 	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front())));
+	this->reqque.pop();
+}
+
+void plexpr::appendR() {
+	this->brackets.pop();
+}
+
+void plexpr::appendBi(Op& op) {
+	*B_R_A(this->reqque.front()) = new plexpr(op, nullptr, 0);
+	this->brackets.push(
+			const_cast<plexpr*>(B_A_P(*B_R_A(this->reqque.front()))));
+	this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 1));
 	this->reqque.pop();
 }
 
@@ -508,7 +546,7 @@ void plexpr::appendL() {
 #undef B_A_P
 
 plexpr parse(string str) {
-	plexpr ret { };
+	plexpr ret;
 	for (auto i : process(str)) {
 		std::cout << convert::expr2str(&ret) << std::endl;
 		ret.append(i);
@@ -552,11 +590,12 @@ BOOST_PYTHON_MODULE(parser)
 int main(int argc, char* argv[]) {
 	if (argc != 2)
 		throw std::runtime_error("No value given to parse.");
-	std::vector < string > oplist { "(", ")" };
-	for (auto i : math::operators::opdict) {
-		oplist.push_back(i.first);
-	}
-	::init (oplist);
+	math::operators::init();
+	auto keywords = math::operators::infixlist;
+	keywords.insert(math::operators::bilist.begin(),
+			math::operators::bilist.end());
+	::init(keywords);
+	assert(trie::getnode("sin") != nullptr);
 	math::plexpr* _ = new math::plexpr;
 	*_ = math::parse(argv[1]);
 #ifndef EXEC_FAIL
