@@ -6,7 +6,7 @@
 #ifdef _MSC_VER
 #define BOOST_PYTHON_STATIC_LIB
 #endif
-#define PY_EXT
+ //#define PY_EXT
 #define PHYCO_MATH
 #if defined __GNUC__ && defined PY_EXT
 #warning Python extension interface are not fully supported and tested\
@@ -106,19 +106,6 @@ node* const root = new node();
 node* current = root;
 node* from = root;
 string notfound;
-#ifdef PY_EXT
-void build(boost::python::list keywords) {
-    node* current;
-    for (unsigned i = 0; i < boost::python::len(keywords); i++) {
-        current = const_cast<node*>(root);
-        for (char letter : (string)boost::python::extract < string
-        >(keywords[i])) {
-            current = current->appendchar(letter);
-        }
-        current->markend();
-    }
-}
-#endif
 
 void build(set<string> keywords) {
     node* current;
@@ -187,7 +174,8 @@ std::vector<string> process(string input) {
     return ret;
 }
 
-string tostr(std::vector<string> vec) {
+#ifdef PY_EXT
+string strvec_repr(std::vector<string> vec) {
     string ret = "[";
     if (!vec.empty()) {
         for (auto i : vec) {
@@ -198,24 +186,25 @@ string tostr(std::vector<string> vec) {
     ret += "]";
     return ret;
 }
+#endif
 
 #ifdef PHYCO_MATH
 
-bool isalpha(string str) {
+bool is_alpha(string str) {
     static const char low = 'a';
     static const char LOW = 'A';
     static const char high = 'z';
     static const char HIGH = 'Z';
     for (char i : str) {
-        if ((i >= low && i <= high) || (i >= LOW && i <= HIGH))
-            return true;
+        if (!(i >= low && i <= high) || (i >= LOW && i <= HIGH))
+            return false;
     }
-    return false;
+    return true;
 }
 
 //There are strong evidence that shows manually written function are
 //dramatically faster than it by regex.
-int isdouble(string str) {
+int is_double(string str) {
     static const char low = '0';
     static const char high = '9';
     int mark = 0;
@@ -258,8 +247,7 @@ public:
         name(name), priority(priority), infix(infix), func(func) {
     }
     Op(string name, unsigned priority, unfunc func, bool infix = true) :
-        name(name), priority(priority), infix(infix) {
-        this->func = Op::wrapper(func);
+        name(name), priority(priority), infix(infix), func(Op::wrapper(func)) {
     }
 #ifdef PY_EXT
     string repr() const {
@@ -293,7 +281,7 @@ const Op MUL_OP("*", 2, (Op::binfunc) &funcs::mul);
 const Op DIV_OP("/", 2, (Op::binfunc) &funcs::div);
 #ifdef _MSC_VER
 const Op POW_OP("^", 3, (Op::binfunc) &std::powl);
-const Op SIN_OP("sin", 4, (Op::unfunc) &std::sinl);
+const Op SIN_OP("sin", 4, (Op::unfunc) &std::sinl, false);
 #else
 const Op POW_OP("^", 3, (Op::binfunc) &pow);
 const Op SIN_OP("sin", 4, (Op::unfunc) &sin);
@@ -301,19 +289,19 @@ const Op SIN_OP("sin", 4, (Op::unfunc) &sin);
 
 typedef std::unordered_map<string, Op> Opdict;
 
-const Opdict infixdict{ { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, {
+const Opdict infix__dict{ { "+", PLU_OP }, { "-", MIN_OP }, { "*", MUL_OP }, {
         "/", DIV_OP }, { "^", POW_OP } };
 
-const Opdict builtindict{ { "sin", SIN_OP } };
+const Opdict built_in_dict{ /*{ "sin", SIN_OP } */ };
 
 set<string> infixlist{ "(", ")" };
 set<string> bilist{};
 
 void init() {
-    for (auto i : infixdict) {
+    for (auto i : infix__dict) {
         infixlist.insert(i.first);
     }
-    for (auto i : builtindict) {
+    for (auto i : built_in_dict) {
         bilist.insert(i.first);
     }
 }
@@ -321,20 +309,21 @@ void init() {
 }
 
 struct plexpr;
-typedef boost::variant<double, int, string, plexpr*, decltype(nullptr)> Arg;
-typedef boost::variant<Arg*, Op*> req_t;
+typedef boost::variant<double, int, string, plexpr*, decltype(nullptr)> arg_t;
+typedef boost::variant<arg_t*, Op*> req_t;
 
 struct plexpr {
     Op op;
-    Arg arg1;
-    Arg arg2;
-    std::queue<req_t> reqque; //request queue
+    arg_t arg1;
+    arg_t arg2;
+    std::pair<plexpr*, unsigned> bottom;
+    std::queue<req_t> reqs; //request queue
     std::stack<plexpr*> brackets;
-    plexpr(Op op = operators::PLU_OP, Arg arg1 = 0, Arg arg2 = nullptr) :
-        op(op), arg1(arg1), arg2(arg2) {
-        //		this->reqque.push(&(this->arg1));
-        //		this->reqque.push(&(this->op));
-        this->reqque.push(&(this->arg2));
+    plexpr(Op op = operators::PLU_OP, arg_t arg1 = 0, arg_t arg2 = nullptr) :
+        op(op), arg1(arg1), arg2(arg2), bottom({ this,0 }) {
+        //		this->reqs.push(&(this->arg1));
+        //		this->reqs.push(&(this->op));
+        this->reqs.push(&(this->arg2));
         this->brackets.push(this);
     }
     ;
@@ -349,6 +338,10 @@ struct plexpr {
     void appendL();
     void appendR();
     void appendBi(Op&);
+    void appendvar(string);
+    bool sequal(plexpr* other) {
+        return ((this->op.name == other->op.name) && other->arg1 == this->arg1) && this->arg2 == other->arg2;
+    }
 }
 ;
 
@@ -379,28 +372,6 @@ struct get_req_ptr_visitor : public boost::static_visitor<req_t> {
             default:
                 throw std::invalid_argument("");
         }
-    }
-};
-
-struct Arg2str_visitor : public boost::static_visitor<string> {
-    string operator()(double arg) const {
-        return std::to_string(arg);
-    }
-    string operator()(int arg) const {
-        return std::to_string(arg);
-    }
-    string operator()(plexpr* arg) const {
-        //		return boost::apply_visitor(Arg2str_visitor(), arg->arg1) + arg->op.name
-        //				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2);
-        return arg->op.name + "("
-            + boost::apply_visitor(Arg2str_visitor(), arg->arg1) + ", "
-            + boost::apply_visitor(Arg2str_visitor(), arg->arg2) + ")";
-    }
-    string operator()(string str) const {
-        return str;
-    }
-    string operator()(decltype(nullptr)) const {
-        return "_";
     }
 };
 
@@ -435,67 +406,66 @@ struct Argexec_visitor : public boost::static_visitor<double> {
     }
 };
 
-inline string Arg2str(Arg arg) {
-    return boost::apply_visitor(Arg2str_visitor(), arg);
-}
-
-inline string expr2str(plexpr* expr) {
-    return Arg2str(expr);
-}
-
-inline req_t get_req_ptr(Arg& arg, int i = 2) {
+inline req_t get_req_ptr(arg_t& arg, int i = 2) {
     return boost::apply_visitor(get_req_ptr_visitor(i), arg);
 }
 
-inline req_t get_req_ptr(Arg* arg, int i = 2) {
+inline req_t get_req_ptr(arg_t* arg, int i = 2) {
     return boost::apply_visitor(get_req_ptr_visitor(i), *arg);
 }
 
 }
 
 /*
- It seems this is a bad practice. Maybe will be improved later.
- In the mean time, be sure to only use on very definite cases.
- Also note the run-time error boost::bad_get only in append(Op&)
- would be caught.
- */
-#define B_R_A(X) (boost::get<Arg*>(X)) // boost_req_t_Arg_ptr
+It seems this is a bad practice. Maybe will be improved later.
+In the mean time, be sure to only use on very definite cases.
+Also note the run-time error boost::bad_get only in append(Op&)
+would be caught.
+*/
+#define B_R_A(X) (boost::get<arg_t*>(X)) // boost_req_t_Arg_ptr
 #define B_R_O(X) (boost::get<Op*>(X)) // boost_req_t_Op_ptr
 #define B_A_P(X) (boost::get<plexpr*>(X)) // boost_Arg_plexpr_ptr
 
 double plexpr::exec() {
-    Arg _ = this;
+    arg_t _ = this;
     return boost::apply_visitor(convert::Argexec_visitor(), _);
 }
 
 void plexpr::append(int arg) {
-    *B_R_A(this->reqque.front()) = arg;
-    this->reqque.pop();
+    *B_R_A(this->reqs.front()) = arg;
+    this->reqs.pop();
 }
 
 void plexpr::append(double arg) {
-    *B_R_A(this->reqque.front()) = arg;
-    this->reqque.pop();
+    *B_R_A(this->reqs.front()) = arg;
+    this->reqs.pop();
+}
+
+void plexpr::appendvar(string varname) {
+    *B_R_A(this->reqs.front()) = varname;
+    this->reqs.pop();
 }
 
 void plexpr::append(Op& op) {
-    if (this->reqque.empty()) {
+    /*this seemed to generate a lotta fragmentations (Anyone comes any idea? This code is
+    enough to demonstrate the algorithm so I'm not axious to improve yet.)*/
+    if (this->reqs.empty()) {
         if (op.priority <= this->brackets.top()->op.priority) {
             this->brackets.top()->arg1 = new plexpr(this->brackets.top());
             this->brackets.top()->arg2 = nullptr;
             this->brackets.top()->op = op;
-            this->reqque.push(&(this->brackets.top()->arg2));
+            this->reqs.push(&(this->brackets.top()->arg2));
         }
         else {
             this->brackets.top()->arg2 = new plexpr(op,
                                                     this->brackets.top()->arg2, nullptr);
-            this->reqque.push(convert::get_req_ptr(this->brackets.top()->arg2));
+            this->reqs.push(convert::get_req_ptr(this->brackets.top()->arg2));
         }
     }
     else {
         try {
-            *B_R_O(this->reqque.front()) = op;
-            this->reqque.pop();
+            *B_R_O(this->reqs.front()) = op;
+            this->reqs.pop();
         }
         catch (boost::bad_get) {
             throw std::runtime_error(
@@ -510,28 +480,31 @@ void plexpr::append(string str) { //sort and branch
     else if (str == ")")
         this->appendR();
     else {
-        int i = isdouble(str);
+        int i = is_double(str);
         if (i == 1)
             this->append(std::stod(str));
         else if (i == 2)
             this->append(std::stoi(str));
         else if (operators::infixlist.find(str) != operators::infixlist.end())
-            this->append(const_cast<Op&>(operators::infixdict.at(str)));
-        else if (operators::bilist.find(str) != operators::bilist.end()) {
-            this->appendBi(const_cast<Op&>(operators::builtindict.at(str)));
-        }
+            this->append(const_cast<Op&>(operators::infix__dict.at(str)));
+        else if (operators::bilist.find(str) != operators::bilist.end())
+            this->appendBi(const_cast<Op&>(operators::built_in_dict.at(str)));
+        else if (is_alpha(str))
+            this->appendvar(str);
         else
             throw std::runtime_error(
-                str + ": Symbolic variable not supported yet");
+                str + ": Not a valid variable name");
     }
 }
 
 void plexpr::appendL() {
-    *B_R_A(this->reqque.front()) = new plexpr();
+    *B_R_A(this->reqs.front()) = new plexpr();
     this->brackets.push(
-        const_cast<plexpr*>(B_A_P(*B_R_A(this->reqque.front()))));
-    this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front())));
-    this->reqque.pop();
+        const_cast<plexpr*>(B_A_P(*B_R_A(this->reqs.front()))));
+    this->bottom.first = const_cast<plexpr*>(B_A_P(*B_R_A(this->reqs.front())));
+    this->bottom.second++;
+    this->reqs.push(convert::get_req_ptr(B_R_A(this->reqs.front())));
+    this->reqs.pop();
 }
 
 void plexpr::appendR() {
@@ -539,11 +512,13 @@ void plexpr::appendR() {
 }
 
 void plexpr::appendBi(Op& op) {
-    *B_R_A(this->reqque.front()) = new plexpr(op, nullptr, 0);
+    *B_R_A(this->reqs.front()) = new plexpr(op, nullptr, 0);
     this->brackets.push(
-        const_cast<plexpr*>(B_A_P(*B_R_A(this->reqque.front()))));
-    this->reqque.push(convert::get_req_ptr(B_R_A(this->reqque.front()), 1));
-    this->reqque.pop();
+        const_cast<plexpr*>(B_A_P(*B_R_A(this->reqs.front()))));
+    this->bottom.first = const_cast<plexpr*>(B_A_P(*B_R_A(this->reqs.front())));
+    this->bottom.second++;
+    this->reqs.push(convert::get_req_ptr(B_R_A(this->reqs.front()), 1));
+    this->reqs.pop();
 }
 
 #undef B_R_A
@@ -558,9 +533,101 @@ plexpr parse(string str) {
     return ret;
 
 }
+
+namespace simplify {
+typedef boost::variant<plexpr, int, string, double> simpr_t;
+typedef std::function<bool(plexpr)> cond_t;
+typedef std::function<simpr_t(plexpr)> to_t;
+struct rewriting_rule {
+    cond_t cond;
+    to_t to;
+    rewriting_rule(cond_t cond, to_t to) :cond(cond), to(to) {
+
+    }
+    bool match(plexpr& expr) const {
+        return cond(expr);
+    }
+    simpr_t apply(plexpr expr) const {
+        auto _ = to(expr);
+        return _;
+    }
+
+};
+struct simp_rule :public rewriting_rule {
+
+};
+struct Arg_int_comp_visitor : public boost::static_visitor<bool> {
+    int i;
+    Arg_int_comp_visitor(int i) :i(i) {
+    }
+    template<class T>
+    bool operator()(T arg) const {
+        return false;
+    }
+    bool operator()(int arg) const {
+        return arg == i;
+    }
+};
+bool Arg_int_comp(arg_t arg, int i) {
+    return boost::apply_visitor(Arg_int_comp_visitor(i), arg);
+}
+#define COND(STR) [](plexpr _) {return STR;}
+#define TO(STR) [](plexpr _) {return STR;}
+const rewriting_rule PLU_C(COND(_.op.name == "+"), TO(plexpr(_.op, _.arg2, _.arg1)));
+const rewriting_rule MUL_C(COND(_.op.name == "*"), TO(plexpr(_.op, _.arg2, _.arg1)));
+const rewriting_rule MUL_0(COND((Arg_int_comp(_.arg1, 0) || Arg_int_comp(_.arg2, 0)) && _.op.name == "*"), TO(0));
+#undef COND
+#undef TO
+}
+namespace convert {
+struct Arg2str_visitor : public boost::static_visitor<string> {
+    string operator()(double arg) const {
+        return std::to_string(arg);
+    }
+    string operator()(int arg) const {
+        return std::to_string(arg);
+    }
+    string operator()(plexpr* arg) const {
+        //		return boost::apply_visitor(Arg2str_visitor(), arg->arg1) + arg->op.name
+        //				+ boost::apply_visitor(Arg2str_visitor(), arg->arg2);
+        return arg->op.name + "("
+            + boost::apply_visitor(Arg2str_visitor(), arg->arg1) + ", "
+            + boost::apply_visitor(Arg2str_visitor(), arg->arg2) + ")";
+    }
+    string operator()(string str) const {
+        return str;
+    }
+    string operator()(decltype(nullptr)) const {
+        return "_";
+    }
+};
+
+struct simp2str_visitor : public boost::static_visitor<string> {
+    template<class T>
+    string operator()(T arg) const {
+        return std::to_string(arg);
+    }
+    string operator()(string arg) const {
+        return arg;
+    }
+    string operator()(plexpr arg) const {
+        return expr2str(&arg);
+    }
+};
+
+inline string Arg2str(arg_t arg) {
+    return boost::apply_visitor(Arg2str_visitor(), arg);
 }
 
-#ifdef PY_EXT
+inline string expr2str(plexpr* expr) {
+    return Arg2str(expr);
+}
+inline string simp2str(simplify::simpr_t arg) {
+    return boost::apply_visitor(simp2str_visitor(), arg);
+}
+}
+}
+
 void init() {
     math::operators::init();
     auto keywords = math::operators::infixlist;
@@ -569,12 +636,6 @@ void init() {
     trie::build(keywords);
     trie::reset();
 }
-#else
-void init(set<string> s) {
-    trie::build(s);
-    trie::reset();
-}
-#endif
 
 #ifdef PY_EXT
 BOOST_PYTHON_MODULE(phycomath)
@@ -582,16 +643,16 @@ BOOST_PYTHON_MODULE(phycomath)
     namespace py = boost::python;
     py::class_<std::vector<string> >("std::vector<string>", py::no_init)
         .def(py::vector_indexing_suite<std::vector<string> >())
-        .def("__repr__", &tostr);
+        .def("__repr__", &strvec_repr);
 
-    py::class_<math::Arg>("arg", py::init<double>())
+    py::class_<math::arg_t>("arg", py::init<double>())
         .def(py::init<int>())
         .def("__repr__", &math::convert::Arg2str);
 
     py::class_<math::Op>("Op", py::no_init)
         .def("__repr__", &math::Op::repr);
 
-    py::class_<math::plexpr>("plexpr", py::init<math::Op, math::Arg, math::Arg>())
+    py::class_<math::plexpr>("plexpr", py::init<math::Op, math::arg_t, math::arg_t>())
         .def("exec", &math::plexpr::exec)
         .def("__repr__", &math::convert::expr2str);
 
@@ -604,22 +665,12 @@ BOOST_PYTHON_MODULE(phycomath)
 
 }
 #else
-//#define EXEC_FAIL
 int main(int argc, char* argv[]) {
-    if (argc != 2)
-        throw std::runtime_error("No value given to parse.");
-    math::operators::init();
-    auto keywords = math::operators::infixlist;
-    keywords.insert(math::operators::bilist.begin(),
-                    math::operators::bilist.end());
-    ::init(keywords);
-    math::plexpr* _ = new math::plexpr;
-    *_ = math::parse(argv[1]);
-#ifndef EXEC_FAIL
-    std::cout << math::convert::expr2str(_) << " = " << _->exec() << std::endl;
-#else
-    std::cout << math::convert::expr2str(_) << std::endl;
-#endif
+    ::init();
+    auto _ = new math::plexpr(math::operators::MUL_OP, 1, 1);
+    std::cout << math::convert::expr2str(_) << "=";
+    auto __ = math::simplify::MUL_0.apply(*_);
+    std::cout << math::convert::simp2str(__) << std::endl;
     return 0;
 }
 #endif
