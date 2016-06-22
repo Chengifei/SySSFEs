@@ -98,6 +98,13 @@ bool plexpr::sequal(expr_ptr other) {
 
 namespace convert {
 
+int stoi(string p) {
+    int x = 0;
+    for (char a : p)
+        x = (x * 10) + (a - '0');
+    return x;
+}
+
 struct Arg2str_visitor : public boost::static_visitor<string> {
     string operator()(double arg) const {
         return std::to_string(arg);
@@ -136,13 +143,12 @@ struct simp2str_visitor : public boost::static_visitor<string> {
 inline string Arg2str(arg_t arg) {
     return boost::apply_visitor(Arg2str_visitor(), arg);
 }
-
 inline string expr2str(plexpr expr) {
     return Arg2str(std::make_shared<plexpr>(expr));
 }
-//inline string simp2str(simplify::simpr_t arg) {
-//    return boost::apply_visitor(simp2str_visitor(), arg);
-//}
+string simp2str(simplify::simpr_t arg) {
+    return boost::apply_visitor(simp2str_visitor(), arg);
+}
 
 
 struct Argexec_visitor : public boost::static_visitor<double> {
@@ -169,6 +175,20 @@ struct Argexec_visitor : public boost::static_visitor<double> {
             "Attempt to evaluate numeric result without full assignment");
     }
     double operator()(decltype(nullptr)) const {
+        throw std::runtime_error("Attempt to dereference void* "
+                                 "(HINT:Possibly incomplete expression)");
+    }
+};
+
+struct arg_simp_visitor :public boost::static_visitor<simplify::simpr_t> {
+    template <class T>
+    simplify::simpr_t operator()(T arg) const {
+        return arg;
+    }
+    simplify::simpr_t operator()(expr_ptr arg) const {
+        return *arg;
+    }
+    simplify::simpr_t operator()(decltype(nullptr)) const {
         throw std::runtime_error("Attempt to dereference void* "
                                  "(HINT:Possibly incomplete expression)");
     }
@@ -231,8 +251,7 @@ void plexpr::appendvar(string varname) {
 }
 
 void plexpr::append(Op& op) {
-    /*this seemed to generate a lotta fragmentations (Anyone comes any idea? This code is
-    enough to demonstrate the algorithm so I'm not axious to improve yet.)*/
+    plexpr& target = *brackets.back();
     if (req) {
         if (op.priority <= brackets.top()->op.priority) {
             brackets.top()->arg1 = std::make_shared<plexpr>(brackets.top());
@@ -263,7 +282,7 @@ void plexpr::append(string str) { //sort and branch
         if (i == 1)
             this->append(std::stod(str));
         else if (i == 2)
-            this->append(std::stoi(str));
+            this->append(convert::stoi(str));
         else if (operators::infixlist.find(str) != operators::infixlist.end())
             this->append(const_cast<Op&>(operators::infix_dict.at(str)));
         else if (operators::bilist.find(str) != operators::bilist.end())
@@ -311,9 +330,6 @@ void plexpr::appendBi(Op& op) {
     }
     req = req_t::arg1_;
 }
-
-#undef B_R_A
-#undef B_R_O
 #undef B_A_P
 
 plexpr parse(string str) {
@@ -324,50 +340,61 @@ plexpr parse(string str) {
     return ret;
 }
 
-//namespace simplify {
-//typedef boost::variant<plexpr, int, string, double> simpr_t;
-//typedef std::function<bool(plexpr)> cond_t;
-//typedef std::function<simpr_t(plexpr)> to_t;
-//struct rewriting_rule {
-//    cond_t cond;
-//    to_t to;
-//    rewriting_rule(cond_t cond, to_t to) :cond(cond), to(to) {
-//
-//    }
-//    bool match(plexpr& expr) const {
-//        return cond(expr);
-//    }
-//    simpr_t apply(plexpr expr) const {
-//        auto _ = to(expr);
-//        return _;
-//    }
-//
-//};
-//struct simp_rule :public rewriting_rule {
-//
-//};
-//struct Arg_int_comp_visitor : public boost::static_visitor<bool> {
-//    int i;
-//    Arg_int_comp_visitor(int i) :i(i) {
-//    }
-//    template<class T>
-//    bool operator()(T arg) const {
-//        return false;
-//    }
-//    bool operator()(int arg) const {
-//        return arg == i;
-//    }
-//};
-//bool Arg_int_comp(arg_t arg, int i) {
-//    return boost::apply_visitor(Arg_int_comp_visitor(i), arg);
-//}
-//#define COND(STR) [](plexpr _) {return STR;}
-//#define TO(STR) [](plexpr _) {return STR;}
-//const rewriting_rule PLU_C(COND(_.op.name == "+"), TO(plexpr(_.op, _.arg2, _.arg1)));
-//const rewriting_rule MUL_C(COND(_.op.name == "*"), TO(plexpr(_.op, _.arg2, _.arg1)));
-//const rewriting_rule MUL_0(COND((Arg_int_comp(_.arg1, 0) || Arg_int_comp(_.arg2, 0)) && _.op.name == "*"), TO(0));
-//#undef COND
-//#undef TO
-//}
+namespace simplify {
+simpr_t arg2simp(arg_t arg) {
+    return boost::apply_visitor(convert::arg_simp_visitor(), arg);
+}
+
+conv_rule::conv_rule(cond_t cond, to_t to) :visitor(simpmatch_visitor(cond)), to(to) {
+}
+bool conv_rule::match(simpr_t expr) const {
+    return boost::apply_visitor(visitor, expr);
+}
+simpr_t conv_rule::apply(plexpr expr) const {
+    return to(expr);
+}
+
+struct simp_rule :public conv_rule {
+    using conv_rule::conv_rule;
+};
+
+struct Arg_int_comp_visitor : public boost::static_visitor<bool> {
+    int i;
+    Arg_int_comp_visitor(int i) :i(i) {
+    }
+    template<class T>
+    bool operator()(T arg) const {
+        return false;
+    }
+    bool operator()(int arg) const {
+        return arg == i;
+    }
+};
+bool Arg_int_comp(arg_t arg, int i) {
+    return boost::apply_visitor(Arg_int_comp_visitor(i), arg);
+}
+
+#define COND(STR) [](plexpr _) {return STR;}
+#define TO(STR) [](plexpr _) {return STR;}
+const conv_rule PLU_C(COND(_.op.name == "+"), TO(plexpr(_.op, _.arg2, _.arg1)));
+const conv_rule MUL_C(COND(_.op.name == "*"), TO(plexpr(_.op, _.arg2, _.arg1)));
+const simp_rule PLU_0(COND(Arg_int_comp(_.arg1, 0) && _.op.name == "+"), TO(arg2simp(_.arg2)));
+const simp_rule MUL_0(COND(Arg_int_comp(_.arg1, 0) && _.op.name == "*"), TO(0));
+#undef COND
+#undef TO
+
+const std::vector<conv_rule> convlist{ PLU_C, MUL_C };
+const std::vector<simp_rule> simplist{ PLU_0, MUL_0 };
+
+simpr_t simplify(plexpr expr) {
+    simpr_t ret = expr;
+    for (auto rr : simplist) {
+        if (rr.match(ret))
+            ret = rr.apply(expr);
+    }
+    return ret;
+}
+
+}
 
 }

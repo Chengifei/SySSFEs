@@ -96,10 +96,40 @@ public:
     bool sequal(expr_ptr);
 };
 
+plexpr parse(string);
+
+namespace simplify {
+typedef boost::variant<plexpr, int, string, double> simpr_t;
+typedef std::function<bool(plexpr)> cond_t;
+typedef std::function<simpr_t(plexpr)> to_t;
+struct conv_rule : public boost::static_visitor<bool> {
+    struct simpmatch_visitor : public boost::static_visitor<bool> {
+        cond_t cond;
+        simpmatch_visitor(cond_t cond) :cond(cond) {
+
+        }
+        template <class T>
+        bool operator()(T arg) const {
+            return false;
+        }
+        bool operator()(plexpr arg) const {
+            return cond(arg);
+        }
+    };
+    simpmatch_visitor visitor;
+    to_t to;
+    conv_rule(cond_t, to_t);
+    bool match(simpr_t) const;
+    simpr_t apply(plexpr) const;
+};
+simpr_t simplify(plexpr);
+}
+
 namespace convert {
 string Arg2str(arg_t);
 string expr2str(plexpr);
+string simp2str(simplify::simpr_t);
 }
-plexpr parse(string);
+
 }
 #endif
