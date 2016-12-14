@@ -151,6 +151,7 @@ class parse_manager {
             cursor = cursor->args.back();
             vec.push_back(cursor);
             cursor->append(t);
+            t->parent = cursor;
         }
     }
     void appendL() noexcept {
