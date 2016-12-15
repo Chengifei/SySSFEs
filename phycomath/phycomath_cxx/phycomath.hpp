@@ -221,6 +221,26 @@ public:
     static const_post_order_iterator const_post_order_end() noexcept {
         return const_post_order_iterator::make_null();
     }
+private:
+    struct __iter_type {
+    private:
+        post_order_iterator __begin, __end;
+    public:
+        __iter_type(post_order_iterator begin, post_order_iterator end)
+            : __begin(begin), __end(end) {}
+        __iter_type(const __iter_type&) = delete;
+        __iter_type& operator=(const __iter_type&) = delete;
+        post_order_iterator begin() const noexcept {
+            return __begin;
+        }
+        post_order_iterator end() const noexcept {
+            return __end;
+        }
+    };
+public:
+    __iter_type iter() noexcept {
+        return {post_order_begin(), post_order_end()};
+    }
     //! Execute at some operator node.
     static double reduce(const node* ptr, const std::unordered_map<string, double>& vardict) {
         double arg = cast_to_double(ptr->args[0], vardict);

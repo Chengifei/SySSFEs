@@ -243,20 +243,6 @@ inline bool Arg_comp(arg_t& arg, cmp_t i) {
     return utils::variant::apply_visitor(Arg_comp_visitor<cmp_t>(i), arg);
 }
 
-template <class T, class U>
-inline bool cmp_second(std::pair<T, U> a, unsigned b) noexcept {
-    return a.second > b;
-}
-
-std::vector<std::pair<expression_tree::node*, unsigned>>
-find_leaves(std::vector<expression_tree::node*> v) {
-    std::vector<std::pair<expression_tree::node*, unsigned>> ret;
-    for (auto i : v) {
-        ret.insert(std::lower_bound(ret.begin(), ret.end(), i->depth(), cmp_second<expression_tree::node*, unsigned>), { i,i->depth() });
-    }
-    return ret;
-}
-
 struct reduce_base {
     static void reduce(expression_tree::node*) {}
 };
@@ -331,16 +317,16 @@ struct mul_reduce : reduce_base {
     }
 };
 
-void simplify(expression_tree& expr, std::vector<expression_tree::node*> v) {
-    for (auto i : find_leaves(v)) {
+void simplify(expression_tree& expr) {
+    for (auto& i : expr.iter()) {
         try {
-            i.first->content = expression_tree::exec_at(i.first);
+            i.content = expression_tree::exec_at(&i);
         }
         catch (...) {
-            if (i.first->content.o->name == "+")
-                add_reduce::reduce(i.first);
-            else if (i.first->content.o->name == "*")
-                mul_reduce::reduce(i.first);
+            if (i.content.o->name == "+")
+                add_reduce::reduce(&i);
+            else if (i.content.o->name == "*")
+                mul_reduce::reduce(&i);
         }
     }
 }
