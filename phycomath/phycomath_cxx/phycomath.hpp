@@ -82,7 +82,7 @@ private:
         typedef value_type& reference;
         typedef std::bidirectional_iterator_tag iterator_category;
         pointer ptr;
-        decltype(node::args)::iterator it;
+        decltype(node::args)::const_iterator it;
     public:
         explicit __post_order_iterator(node* ptr) : ptr(ptr) {
             if (ptr->parent)

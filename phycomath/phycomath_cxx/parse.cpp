@@ -105,7 +105,6 @@ BOOST_PYTHON_MODULE(phycomath)
     py::to_python_converter<math::arg_t, PyObject_conv_visitor>();
 
     py::class_<math::expression_tree, boost::noncopyable, std::shared_ptr<math::expression_tree>>("expr_t", py::no_init)
-        .def_readonly("mroot", &math::expression_tree::mroot)
         .def("exec", &math::expression_tree::fexec,exec_fp())
         .def("__repr__", &math::expression_tree::repr);
     //py::class_<math::expression_tree::node, boost::noncopyable>("expr_node",py::no_init);
