@@ -49,7 +49,7 @@ public:
     }
 };
 
-Op::Op(string name, unsigned priority, binfunc func, bool infix) :
+Op::Op(string name, unsigned priority, func_t func, bool infix) :
     name(name), priority(priority), minfix(infix), func(func) {}
 
 #ifdef PY_EXT
