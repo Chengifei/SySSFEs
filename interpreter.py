@@ -22,7 +22,11 @@ print('PTEK Physics Thought Experiment Kit\n'
       'Any part of the documentation and strings in the program '
       'do not imply any authorization on copyright.')
 while True:
-    string = input("PTEK > ")
+    try:
+        string = input("PTEK > ")
+    except EOFError:
+        print()
+        exit()
     string = string.split()
     try:
         if string[0] == 'new':

@@ -3,6 +3,7 @@ from itertools import combinations
 from math import isclose, fsum, ceil
 from geom import segment
 import mechanics
+from phycomath import linalg
 
 
 class event():
@@ -16,10 +17,8 @@ class sim():
     outputtable = str.maketrans('', '', "'{}")
     heuristiclist = [i for i in range(2, 21, 2)]
 
-    def __init__(self, name, objs, step=10 ** -1, field=None,
-                 const=set(), tol=10 ** -3):
+    def __init__(self, name, objs=set(), step=10 ** -1, const=set(), tol=10 ** -3):
         self.objs = objs
-        self.field = field
         self.tol = tol  # tolerance
         self.step, self.__step = step, step
         self.cflag = False  # critical flag
@@ -77,11 +76,11 @@ class sim():
         x, v = self.x[-1][1].copy(), self.v[-1][1].copy()
         for Obj in self.objs:
             # compute resultant force
-            F = sum(Obj.getforce(_Obj) for _Obj in self.objs) + self.field(x[Obj])
+            F = sum((Obj.getforce(_Obj) for _Obj in self.objs), linalg.vector(0,0,0))
             a = F / Obj.mass
             # should have been improved
-            x[Obj] += (v[Obj] + a * self.__step / 2) * self.__step
-            v[Obj] += a * self.__step
+            x[Obj] += (v[Obj] + a.mul(self.__step) / 2).mul(self.__step)
+            v[Obj] += a.mul(self.__step)
         return x, v
 
     def heuristic(self):
@@ -93,13 +92,17 @@ class sim():
         self.heuristiclist = sim.heuristiclist
 
     def __str__(self):
-        output = {}
-        print(self.x)
-        for obj in self.objs:
-            output[obj] = [_f[0] for _f in self.x]
-        X = str(output[self.objs[0]]).replace("}), (", '})\n(')
-        # X = X.translate(sim.outputtable)
-        return X + '\n'
+        if (hasattr(self, 'x')):
+            output = {}
+            print(self.x)
+            for obj in self.objs:
+                output[obj] = [_f[0] for _f in self.x]
+            X = str(output[self.objs[0]]).replace("}), (", '})\n(')
+            # X = X.translate(sim.outputtable)
+            return X + '\n'
+        else:
+            return 'This sim has never run\n' + \
+            (str({i.name for i in self.objs}) if self.objs else 'empty')
 
 
 class _cache():

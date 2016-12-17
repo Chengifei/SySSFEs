@@ -1,10 +1,52 @@
-/*! \file */
+/* Copyright (c) 2016-2017 Yifei Zheng
+ * All rights reserved.
+ * Unauthorized copying of this file, in any means is strictly prohibited.
+ */
 #include "phycomath.hpp"
-#include "math_utils.cpp"
+#include "math_utils.hpp"
 #include <stack>
-#ifndef PHYCO_USE_UMAP
-#define unordered_map map
-#endif
+#include <experimental/string_view>
+
+inline bool is_alpha(const std::string& str) noexcept {
+    for (char i : str) {
+        if (!(('a' <= i  && i <= 'z') || ('A' <= i && i <= 'Z')))
+            return false;
+    }
+    return true;
+}
+
+// There are strong evidence that shows manually written function are
+// dramatically faster than it by regex.
+//!
+//! Check if str can be converted to double or int
+//!
+inline int is_double(const std::string& str) noexcept {
+    unsigned dotcount = 0;
+    for (char i : str) {
+        if ('0' <= i && i <= '9') {
+        }
+        else if (i == '.')
+            ++dotcount;
+        else //failure not dot or digit
+            return 0;
+    }
+    switch (dotcount) {
+        case 1:
+            return 1;
+        case 0:
+            return 2;
+        default:
+            return 0;
+    }
+}
+
+inline int STOI(string s) noexcept {
+    int x = 0;
+    for (auto i : s)
+        x = (x * 10) + (i - '0');
+    return x;
+}
+
 
 namespace math {
 
@@ -21,36 +63,11 @@ const Op* get_op(const string& str) {
         case str2int("^"):
             return &operators::POW_OP;
     }
+    return nullptr;
 }
 
-struct arg_equal_visitor :public utils::variant::static_visitor<bool> {
-    template <class T, class U>
-    bool operator()(T a, U b) const {
-        return false;
-    }
-    template <class T>
-    bool operator()(T a, T b) const {
-        return a == b;
-    }
-};
-
-template<class cmp_t>
-struct Arg_comp_visitor : public utils::variant::static_visitor<bool> {
-private:
-    cmp_t i;
-public:
-    Arg_comp_visitor(cmp_t i) :i(i) {}
-    template<class T>
-    bool operator()(T) const {
-        return false;
-    }
-    bool operator()(cmp_t arg) const {
-        return arg == i;
-    }
-};
-
 Op::Op(string name, unsigned priority, func_t func, bool infix) :
-    name(name), priority(priority), minfix(infix), func(func) {}
+    name(name), priority(priority), func(func), minfix(infix) {}
 
 #ifdef PY_EXT
 string Op::repr() const noexcept {
@@ -61,7 +78,8 @@ string Op::repr() const noexcept {
 
 namespace operators {
 
-const Opdict built_in_dict{ { "sin", &SIN_OP }, {"cos", &COS_OP}, {"tan", &TAN_OP}, {"ln", &LN_OP} , {"exp", &EXP_OP}, {"sqrt", &SQRT_OP} };
+const map<string, const Op*> built_in_dict
+{ { "sin", &SIN_OP }, {"cos", &COS_OP}, {"tan", &TAN_OP}, {"ln", &LN_OP} , {"exp", &EXP_OP}, {"sqrt", &SQRT_OP} };
 
 std::set<string> infixlist{ "(", ")", "+", "-", "*", "/", "^" };
 std::set<string> bilist{};
@@ -74,108 +92,116 @@ void init() noexcept {
 
 } // namespace operators
 
-namespace convert {
 
-inline int stoi(string s) noexcept {
-    int x = 0;
-    for (auto i : s)
-        x = (x * 10) + (i - '0');
-    return x;
-}
-
-struct arg_to_str_visitor : public utils::variant::static_visitor<string> {
-    string operator()(double arg) const {
-        return std::to_string(arg);
+struct token_iterator {
+    std::experimental::string_view str;
+    string token;
+    string delim;
+    token_iterator(const string& str) : str(str) { operator++(); }
+    token_iterator& operator++() noexcept {
+        token.clear();
+        if (!delim.empty())
+            std::swap(token, delim);
+        else {
+            while (!str.empty()) {
+                delim = _inc_impl(str, "+", "-", "*", "/", "^", "(", ")");
+                if (!delim.empty()) {
+                    str.remove_prefix(delim.size());
+                    if (token.empty()) {
+                        std::swap(token, delim);
+                    }
+                    break;
+                }
+                else {
+                    token += str[0];
+                    str.remove_prefix(1);
+                }
+            }
+        }
+        return *this;
     }
-    string operator()(int arg) const {
-        return std::to_string(arg);
+    string& operator*() noexcept {
+        return token;
     }
-    string operator()(string str) const {
-        return str;
+    string& operator->() noexcept {
+        return token;
     }
-    string operator()(const Op* op) const {
-        return op->name;
+private:
+    string _inc_impl(decltype(str)) noexcept {
+        return "";
+    }
+    template <class C, class... R>
+    string _inc_impl(std::experimental::string_view& str,C c, R... _R) noexcept {
+        if (match(c))
+            return c;
+        else
+            return _inc_impl(str, _R...);
+    }
+    bool match(const char* cstr) noexcept {
+      	auto begin = cstr;
+      	auto it = str.begin();
+        while (*begin != 0 && it != str.end()) {
+          	if (*begin != *it) {
+              	return false;
+            }
+          	++it;
+          	++begin;
+        }
+        return true;
     }
 };
 
-}
-
 class parse_manager {
-    typedef expression_tree::node node;
     expression_tree tree;
-    node* cursor = tree.mroot;
-    std::vector<node*> vec{ cursor };
-    std::stack<node*> stack;
-    bool last_is_built_in = false;
+    expression_tree::post_order_iterator cursor = tree._post_order_root();
+    std::stack<decltype(cursor)> stack;
     void append(int arg) noexcept {
-        cursor->append(arg);
+        tree.insert_as_child(cursor, arg_t(arg));
     }
     void append(double arg) noexcept {
-        cursor->append(arg);
+        tree.insert_as_child(cursor, arg_t(arg));
     }
     void append(string arg) noexcept {
-        cursor->append(arg_t(arg));
+        tree.insert_as_child(cursor, arg_t(std::move(arg)));
+        cursor->args.back()->var = true;
     }
     void append(const Op* op) noexcept {
-        if (cursor->content.o->priority > op->priority) {
-            if (!cursor->parent) {
-                cursor->parent = new(utils::allocator<node>::allocate(1)) node(arg_t(op), nullptr);
-                vec.push_back(cursor->parent);
-                cursor->parent->append(cursor);
-                cursor = cursor->parent;
-                tree.mroot = cursor;
-            }
+        if (tree.as_op(cursor->content)->priority > op->priority) {
+            if (!cursor->parent)
+                cursor = tree.insert_as_parent(cursor, arg_t(op));
             else {
-                cursor = cursor->parent;
+                cursor = expression_tree::post_order_iterator(cursor->parent);
                 append(op);
             }
         }
-        else if (cursor->content.o->priority == op->priority) {
-            if (!(*cursor->content.o == *op)) {
-                if (cursor->parent)
-                    cursor->parent->args.pop_back();
-                cursor->parent = new(utils::allocator<node>::allocate(1)) node(arg_t(op), cursor->parent);
-                vec.push_back(cursor);
-                cursor->parent->append(cursor);
-                cursor = cursor->parent;
-                if (cursor->parent)
-                    cursor->parent->append(cursor);
-                else
-                    tree.mroot = cursor;
-            }
+        else if (tree.as_op(cursor->content)->priority == op->priority) {
+            if (tree.as_op(cursor->content) != op)
+                cursor = tree.insert_as_parent(cursor, arg_t(op));
         }
         else {
-            auto t = cursor->args.back();
-            cursor->args.pop_back();
-            cursor->append(arg_t(op));
-            cursor = cursor->args.back();
-            vec.push_back(cursor);
-            cursor->append(t);
-            t->parent = cursor;
+            auto last_child = cursor.get_at(cursor->args.size() - 1);
+            cursor = tree.insert_as_child(cursor, arg_t(op));
+            tree.move_child(last_child, cursor);
         }
     }
     void appendL() noexcept {
         stack.push(cursor);
-        cursor->append(arg_t(&operators::PLU_OP));
-        cursor = cursor->args.back();
-        vec.push_back(cursor);
-        cursor->append(arg_t(0));
+        cursor = tree.insert_as_child(cursor, arg_t(&operators::PLU_OP));
+        tree.insert_as_child(cursor, arg_t(0));
     }
     void appendR() noexcept {
         cursor = stack.top();
         stack.pop();
-        if (operators::bilist.count(cursor->content.o->name))
-            cursor = cursor->parent;
+        if (operators::bilist.count(tree.as_op(cursor->content)->name))
+            cursor = expression_tree::post_order_iterator(cursor->parent);
     }
     void append_built_in(const Op* op) noexcept {
-        cursor->append(arg_t(op));
-        cursor = cursor->args.back();
-        vec.push_back(cursor);
+        cursor = tree.insert_as_child(cursor, arg_t(op));
     }
 public:
     parse_manager() {
-        cursor->content = &operators::PLU_OP;
-        cursor->append(arg_t(0));
+        cursor = tree.insert_as_parent(tree._post_order_root(),
+                                       arg_t(&operators::PLU_OP));
     }
     void append_branch(string str) {
         if (str[0] == '(') { // str[0] is the whole string, for performance
@@ -189,8 +215,8 @@ public:
             if (i == 1)
                 append(std::stod(str));
             else if (i == 2)
-                append(convert::stoi(str));
-            else if (operators::infixlist.find(str) != operators::infixlist.end()) {
+                append(STOI(str));
+            else if (operators::infixlist.count(str)) {
                 append(get_op(str));
             }
             else if (operators::bilist.count(str)) {
@@ -203,188 +229,43 @@ public:
                     str + ": Not a valid variable name");
         }
     }
-public:
     auto get_tree() noexcept {
+        for (const auto& i : tree.citer()) {
+            if (i.var && i.parent) {
+                auto temp = i.parent;
+                do {
+                    temp->var = true;
+                } while ((temp = temp->parent) && !temp->var);
+            }
+        }
         return std::move(tree);
-    }
-    auto get_vec() noexcept {
-        return std::move(vec);
     }
 };
 
-expression_tree parse(string input, trie& Trie) {
+expression_tree parse(string input) {
     parse_manager a;
-    for (string& i : process(input, Trie)) {
-        a.append_branch(std::move(i));
+    for (token_iterator it(input); *it != ""; ++it) {
+        a.append_branch(std::move(*it));
     }
     return a.get_tree();
 }
 
-eqn_t::eqn_t(const expression_tree& lhs, const expression_tree& rhs) : lhs(lhs), rhs(rhs) {}
+eqn_t::eqn_t(expression_tree&& lhs, expression_tree&& rhs) : lhs(std::move(lhs)), rhs(std::move(rhs)) {}
 
 void eqn_t::group_to_left() {
-    auto temp = lhs.mroot;
-    lhs.mroot = new(utils::allocator<expression_tree::node>::allocate(1)) expression_tree::node(arg_t(&operators::MIN_OP), nullptr);
-    lhs.mroot->append(temp);
-    lhs.mroot->append(rhs.mroot);
-    rhs.mroot = nullptr;
+    auto temp = lhs.mroot.get();
+    lhs.insert_as_parent(lhs._post_order_root(), arg_t(&operators::MIN_OP));
+    lhs.move_tree(std::move(rhs), lhs._post_order_root());
+    if (temp->var || rhs.mroot->var)
+        lhs.mroot->var = true;
+    lhs.slot_available = false;
 }
-
-double eqn_t::fNsolve(string varname, double seed) {
+#ifdef PY_EXT
+double eqn_t::fNsolve(string varname, PyObject* dict) {
     if (rhs.mroot)
         group_to_left();
-    return solver::fNsolve(lhs, varname, seed, {});
+    return solver::fNsolve(lhs, varname, _PyDict_to_UMap(dict));
 }
-
-namespace simplify {
-
-template <class cmp_t>
-inline bool Arg_comp(arg_t& arg, cmp_t i) {
-    return utils::variant::apply_visitor(Arg_comp_visitor<cmp_t>(i), arg);
-}
-
-struct reduce_base {
-    static void reduce(expression_tree::node*) {}
-};
-
-struct filter_only_plain {
-    static bool test(expression_tree::node* ptr) {
-        return ptr->content.tag == 1 || ptr->content.tag == 0;
-    }
-};
-
-struct filter_only_add {
-    static bool test(expression_tree::node* ptr) {
-        return ptr->content.tag == 3 && ptr->content.o->name == "+";
-    }
-};
-
-struct add_reduce : reduce_base {
-    static void reduce(expression_tree::node* ptr) {
-        auto non_plain = filter<std::vector<expression_tree::node*>, filter_only_plain>(ptr->args);
-        auto cant_simplify = filter<std::vector<expression_tree::node*>, filter_only_add>(non_plain);
-        // non_plain now reduce to add only
-        double arg = 0;
-        for (auto i : ptr->args) {
-            arg += expression_tree::cast_to_double(i, {});
-            utils::allocator<expression_tree::node>::deallocate(i);
-        }
-        ptr->args.clear();
-        for (auto i : non_plain) {
-            merge(i, ptr);
-        }
-        if (cant_simplify.empty() && non_plain.empty())
-            ptr->content = arg;
-        else if (!non_plain.empty()) {
-            //non_plain.clear(); // no use
-            ptr->append(arg);
-            reduce(ptr);
-        }
-        else {
-            ptr->args = cant_simplify;
-            ptr->append(arg);
-        }
-
-    }
-    static void merge(expression_tree::node* from, expression_tree::node* to) {
-        from->args.reserve(from->args.size() + to->args.size());
-        to->args.insert(to->args.end(), from->args.begin(), from->args.end());
-    }
-    template <class C>
-    static void move(std::vector<C>& a, std::vector<C>&& b) {
-        a.reserve(a.size() + b.size());
-        a.insert(a.end(), b.begin(), b.end());
-    }
-};
-
-struct mul_reduce : reduce_base {
-    static void reduce(expression_tree::node* ptr) {
-        auto non_plain = filter<std::vector<expression_tree::node*>, filter_only_plain>(ptr->args);
-        double arg = expression_tree::cast_to_double(ptr->args[0], {});
-        for (auto it = ++ptr->args.begin(); it != ptr->args.end();) {
-            arg *= expression_tree::cast_to_double(*it, {});
-            it = ptr->erase(it);
-        }
-        if (non_plain.empty())
-            ptr->content = arg;
-        else if (arg == 0) {
-            ptr->content = 0;
-        }
-        else {
-            ptr->args = non_plain;
-            ptr->append(arg);
-        }
-    }
-};
-
-void simplify(expression_tree& expr) {
-    for (auto& i : expr.iter()) {
-        try {
-            i.content = expression_tree::exec_at(&i);
-        }
-        catch (...) {
-            if (i.content.o->name == "+")
-                add_reduce::reduce(&i);
-            else if (i.content.o->name == "*")
-                mul_reduce::reduce(&i);
-        }
-    }
-}
-} // namespace simplify
-
-namespace calculus {
-
-#ifndef _MSC_VER
-constexpr
 #endif
-inline double STEP() noexcept {
-    return sqrt(pow(10, -15));
-}
-
-double fdiff(const expression_tree& expr, string varname, double x) {
-    double step = STEP() * x;
-    std::unordered_map<string, double>vardict{ {varname, x - step} };
-    auto y1 = expr.fexec(vardict);
-    vardict[varname] = x + step;
-    auto y2 = expr.fexec(vardict);
-    return (y2 - y1) / STEP() / 2;
-}
-#undef STEP
-} // namespace calculus
-
-namespace solver {
-#define TOLERANCE 1e-6
-#define MAX_ITER 10000
-double fNsolve(const expression_tree& expr, string varname, double seed, std::unordered_map<string, double> vardict) {
-    unsigned i = 0;
-    vardict = { { varname, seed } };
-    double& x = vardict[varname];
-    while (fabs(expr.fexec(vardict)) > TOLERANCE && i != MAX_ITER) {
-        x -= expr.fexec(vardict) / calculus::fdiff(expr, varname, x);
-        ++i;
-    }
-    if (fabs(expr.fexec(vardict)) <= TOLERANCE)
-        return x;
-    throw std::runtime_error("Newton's method not converging (HINT: Try changing the seed)");
-}
-
-} // namespace solver
 
 } // namespace math
-
-decltype(math::expression_tree::node::args) math::expression_tree::__dummy_vector{};
-
-std::ostream& operator<<(std::ostream& os, const math::arg_t& arg) {
-    os << utils::variant::apply_visitor(math::convert::arg_to_str_visitor(), arg);
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const math::expression_tree::node& node) {
-    os << math::expression_tree::str_at(&node);
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const math::eqn_t& eqn) {
-    os << eqn.repr();
-    return os;
-}

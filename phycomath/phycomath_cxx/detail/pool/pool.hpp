@@ -24,13 +24,13 @@ private:
     static T* current;
     static inline void get_buffer() {
         min = (T*) ::operator new(sizeof(T)*max);
-        current=min;
+        current = min;
     }
 public:
     static inline T* allocate(std::size_t n = 1) {
         if (!min)
             get_buffer();
-        if (current-min<max) {
+        if (current - min < max) {
             return current++;
         }
         else {
@@ -38,20 +38,28 @@ public:
         }
     }
     static inline void deallocate(T* ptr, std::size_t n = 1) noexcept {
-        if (ptr){
-            for (auto tmp=ptr; n != 0; --n, ++tmp)
+        if (ptr) {
+            for (auto tmp = ptr; n != 0; --n, ++tmp)
                 tmp->~T();
-            if (min<=ptr && ptr+(n-1)-min<=max){
-                if (current-ptr==1)
-                    current=ptr;
+            if (min <= ptr && ptr + (n - 1) - min <= max) {
+                if (current - ptr == 1)
+                    current = ptr;
             }
             else
                 ::operator delete(ptr, sizeof(T)*n);
         }
     }
+    static inline void deallocate_only(T* ptr, std::size_t n = 1) noexcept {
+        if (min <= ptr && ptr + (n - 1) - min <= max) {
+            if (current - ptr == 1)
+                current = ptr;
+        }
+        else
+            ::operator delete(ptr, sizeof(T)*n);
+    }
     static inline void purge() noexcept {
         ::operator delete(min, sizeof(T)*max);
-        min=nullptr;
+        min = nullptr;
     }
     constexpr static unsigned max_size() noexcept {
         return max;
@@ -59,9 +67,9 @@ public:
 };
 
 template <class T, unsigned max>
-T* pool<T,max>::min=nullptr;
+T* pool<T, max>::min = nullptr;
 template <class T, unsigned max>
-T* pool<T,max>::current=nullptr;
+T* pool<T, max>::current = nullptr;
 
 }
 #endif

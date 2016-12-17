@@ -52,10 +52,10 @@ class obj():
 
     def getforce(self, obj=None):
         # sample implementation
-        return sum(i.exec({'m':self.mass, 'g': 9.8}) for i in self.forces)
+        return sum((linalg.vector([i.exec({'m':self.mass, 'g': 9.8}) for i in F]) for F in self.forces), linalg.vector(0,0,0))
 
-    def addforce(self, string):
-        self.forces.append(genmath.parse(string))
+    def addforce(self, l):
+        self.forces.append(tuple(genmath.parse(str(i)) for i in l))
 
     def __str__(self):
         return obj.reprTemplate.substitute(name=self.name,
