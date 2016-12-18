@@ -81,6 +81,7 @@ private:
         typedef T pointer;
         typedef value_type& reference;
         typedef std::bidirectional_iterator_tag iterator_category;
+    private:
         pointer ptr;
         decltype(node::args)::const_iterator it;
     public:
@@ -222,24 +223,27 @@ public:
         return const_post_order_iterator::make_null();
     }
 private:
+    template <class T>
     struct __iter_type {
     private:
-        post_order_iterator __begin, __end;
+        T __begin, __end;
     public:
-        __iter_type(post_order_iterator begin, post_order_iterator end)
-            : __begin(begin), __end(end) {}
+        __iter_type(T&& begin, T&& end) : __begin(begin), __end(end) {}
         __iter_type(const __iter_type&) = delete;
         __iter_type& operator=(const __iter_type&) = delete;
-        post_order_iterator begin() const noexcept {
+        T begin() const noexcept {
             return __begin;
         }
-        post_order_iterator end() const noexcept {
+        T end() const noexcept {
             return __end;
         }
     };
 public:
-    __iter_type iter() noexcept {
+    __iter_type<post_order_iterator> iter() noexcept {
         return {post_order_begin(), post_order_end()};
+    }
+    __iter_type<const_post_order_iterator> citer() const noexcept {
+        return {const_post_order_begin(), const_post_order_end()};
     }
     //! Execute at some operator node.
     static double reduce(const node* ptr, const std::unordered_map<string, double>& vardict) {
