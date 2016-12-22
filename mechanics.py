@@ -2,7 +2,6 @@
 For now, it supports ,specifically, collision detection and 2-D dynamics.'''
 from phycomath import linalg, genmath
 import geom
-from __init__ import G, epsilon0
 from math import pi
 from string import Template
 
@@ -30,23 +29,17 @@ def colSolver(m=None, v=None, e=1):
 
 class obj():
 
-    __slots__ = ('name', 'mass', 'ability', 'pos', 'velocity',
-                 'mode', 'shape', 'charge', 'material')
+    __slots__ = ('name', 'mass', 'pos', 'velocity',
+                 'mode', 'shape', 'charge', 'material', 'forces')
 
-    reprTemplate = Template('${name}:mass=${mass},pos=${pos},v=${v}')
+    reprTemplate = Template('${name}: mass = ${mass}, '
+                            'pos = ${pos}, velocity = ${v}')
 
-    def newtonianGravity(self, other, r):
-        return G * self.mass * other.mass / r / r
-
-    def coulombForce(self, other, r):
-        return self.charge * other.charge / 4 / pi / epsilon0 / r / r
-
-    def __init__(self, name, mass, initPos=linalg.vector(), point=True, mode='rigid',
-                 charge=False, initv=linalg.vector(), material=None):
+    def __init__(self, name, mass=0, pos=linalg.vector(0, 0, 0), point=True, mode='rigid',
+                 charge=False, initv=linalg.vector(0, 0, 0), material=None):
         self.name = name
         self.mass = mass
-        self.ability = False
-        self.pos = initPos
+        self.pos = pos
         self.velocity = initv
         self.mode = mode
         if point:
@@ -55,14 +48,14 @@ class obj():
         if charge:
             self.charge = charge
         self.material = material
+        self.forces = []
 
-    def getforce(self, obj):
-        if self.charge:
-            return self.coulombForce(obj)
-        return linalg.vector()
+    def getforce(self, obj=None):
+        # sample implementation
+        return sum(i.exec({'m':self.mass, 'g': 9.8}) for i in self.forces)
 
-    def __repr__(self):
-        return self.name
+    def addforce(self, string):
+        self.forces.append(genmath.parse(string))
 
     def __str__(self):
         return obj.reprTemplate.substitute(name=self.name,
@@ -70,6 +63,3 @@ class obj():
                                            pos=self.pos,
                                            v=self.velocity)
 
-
-class constraint(genmath.relexpr):
-    pass

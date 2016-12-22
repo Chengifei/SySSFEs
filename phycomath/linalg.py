@@ -3,127 +3,8 @@ In normal cases, you shouldn't invoke this directly.
 
 '''
 import math
-from phyco import error
-from .genmath import *
 from string import Template
-
-
-class vector():
-    """define a vector in cartesian (rec) cylinder (cyl) or spherical (sph) mode.
-
-    Use '*','+','-' to obtain a scalar product, sum and difference, respectively.
-    'dot' and 'cross' method is provided to get inner and outer product of vectors, respectively.
-    'trans' method is used for transform an vector from one to another type of coordinate system.
-    'angle' method can return the angle between vectors.
-
-    This class is used as point object in geom.
-
-    """
-
-    __slots__ = ('x', 'y', 'z', 'mode')
-
-    def __init__(self, a=0, b=0, c=0, mode='rec'):
-
-        if mode == 'rec':
-            self.x = a
-            self.y = b
-            self.z = c
-        elif mode == 'cyl':
-            self.x = a * math.cos(b)
-            self.y = a * math.sin(b)
-            self.z = c
-        elif mode == 'sph':
-            self.x = a * math.sin(b) * math.cos(c)
-            self.y = a * math.sin(b) * math.sin(c)
-            self.z = a * math.cos(b)
-        self.mode = mode
-
-    def __mul__(self, scalar):
-        return vector(scalar * self.x, scalar * self.y, scalar * self.z)
-
-    def __rmul__(self, scalar):
-        return self * scalar
-
-    def __truediv__(self, scalar):
-        return vector(self.x / scalar, self.y / scalar, self.z / scalar)
-
-    def dot(self, other):
-        return self.x * other.x + self.y * other.y + self.z * other.z
-
-    def cross(self, other):
-        m = matrix([['i', 'j', 'k'], self.list(), other.list()])
-        x, y, z = m.det(operator=True)
-        return vector(x, y, z)
-
-    def __add__(self, other):
-        return vector(self.x + other.x, self.y + other.y, self.z + other.z)
-
-    def __sub__(self, other):
-        return vector(self.x - other.x, self.y - other.y, self.z - other.z)
-
-    def __neg__(self):
-        return vector(-self.x, -self.y, -self.z)
-
-    def __abs__(self):
-        return math.sqrt(self.x ** 2 + self.y ** 2 + self.z ** 2)
-
-    def trans(self, coord='cyl'):
-        if coord == 'cyl':
-            self.x = math.hypot(self.x, self.y)
-            self.y = math.atan2(self.y, self.x)
-        if coord == 'sph':
-            raise error.UnderConstruction
-
-    def angle(self, other):
-        return math.acos(self.dot(other) / abs(self) / abs(other))
-
-    def unitize(self):
-        try:
-            return self / abs(self)
-        except ZeroDivisionError:
-            return vector()
-
-    def isCollinear(self, other):
-        """Collinearity check
-
-        Return table:
-        exactly same direction --- True
-        opposing direction ------- -1
-        zero-vector collinear ---- 2
-        None of above ------------ False
-        """
-        if self and other:
-            if self.unitize() == other.unitize():
-                return True
-            elif self.unitize() == -other.unitize():
-                return -1  # collinear but inversed direction
-            return False
-        return 2
-
-    def list(self):
-        return [self.x, self.y, self.z]
-
-    def __repr__(self):
-        return str(self.list())
-
-    def __len__(self):
-        return 3
-
-    def __bool__(self):
-        return abs(self).__bool__()
-
-    def __eq__(self, other):
-        return self.list() == other.list()
-
-    def __ne__(self, other):
-        return self.list != other.list()
-
-    def __getitem__(self, index):
-        if index == 0:
-            return self.x
-        elif index == 1:
-            return self.y
-        return self.z
+from .vector import vector
 
 class matrix():
 
@@ -193,12 +74,6 @@ class matrix():
     def __repr__(self):
         A = self.transpose()
         return '\n'.join([str(col).lstrip('[').rstrip(']') for col in A])
-
-
-class operator():
-
-    def __call__(self, expr):
-        pass
 
 
 class field():
