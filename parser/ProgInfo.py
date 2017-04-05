@@ -8,7 +8,17 @@
 ################################################################################
 from . import expr
 from collections import OrderedDict as odict
-from itertools import chain
+from itertools import chain, combinations
+import enum
+from . import resolver
+
+
+class FreeVar:
+    def __init__(self, name, type, initializer=None):
+        self.name = name
+        self.type = type
+        self.value = initializer
+
 
 OP_TO_INST = {
     '+': 'ADD',
@@ -25,29 +35,29 @@ def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 
-class FreeVar:
-    def __init__(self, name, Type, initializer=None):
-        self.name = name
-        self.Type = Type
-        self.value = initializer
-
-    def __repr__(self):
-        return f'Name {self.name}, value {self.value}'
-
-
-class NVar(FreeVar):
+def get_n_in_both(seq1, seq2, n) -> list:
     """
-    This class is derived from variable, and provides storage
-    for order of derivative, which is required to resolve the
-    solving order.
+    Get first :param n: elements appeared both in seq1 and seq2,
+    return all if there's less than n elements, iterate on seq1.
     """
+    it = (i for i in seq1 if i in seq2)
+    ret = []
+    for i in range(n):
+        ret.append(next(it))
+    return ret
 
-    def __init__(self, name, Type='double', diff=0, initializer=None):
-        super().__init__(name, Type, initializer)
-        self.diff = diff
 
-    def __repr__(self):
-        return self.name + "'" * self.diff + f': {self.name}, order {self.diff}'
+def get_n_idx_in_both(seq1, seq2, n) -> list:
+    """
+    Get first :param n: indices of elements appeared both in
+    seq1 and seq2, return all if there's less than n elements.
+    Iterate on seq1.
+    """
+    it = (i for i, j in enumerate(seq1) if j in seq2)
+    ret = []
+    for i in range(n):
+        ret.append(next(it))
+    return ret
 
 
 def findDerivatives(expr):
@@ -60,7 +70,7 @@ def findDerivatives(expr):
             if expression[0] == 'diff':
                 DIFF -= 1
         elif isinstance(expression, str):
-            yield NVar(expression, diff=DIFF)
+            yield resolver.cNVar(expression, DIFF)
 
     yield from customorder(expr)
 
@@ -80,7 +90,6 @@ class Rule:
     def __init__(self, content, attribute):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
         self.attribute = attribute
-        self.vars = set(chain(listVars(self.content[0]), listVars(self.content[1])))
 
     @staticmethod
     def writeExpr(expression: tuple):
@@ -112,9 +121,68 @@ class Rule:
         return f'<{self.attribute}> {self.content[0]} = {self.content[1]}'
 
 
+class EqnType(enum.IntEnum):
+    ALG_S = 1
+    ALG_M = 2
+    DIFF_S = 3
+
+
 class RulePack:
+    """
+    This is the class representing packed rule on highest level.
+    That is, usually the pack may be divided further for actual
+    computation, as ODE, algebraic equation system, etc.
+    Thus, instances of this class are created purely by inspecting variables.
+    """
+
     def __init__(self, content):
         self.pack = content
+        self.solveFor = None
+        self.order = None
+
+    def extend(self, iterable):
+        self.pack.extend(iterable)
+
+    def resolve(self, known):
+        Known = set(known)  # cannot rebind known, we're modifying as ref
+        for i in self.pack:
+            i.minus(Known)
+
+        self.order = resolver.resolve(self.pack)
+
+        def cat(t):
+            return t.name + str(t.order)
+
+        with open('a.dot', 'w') as f:
+            f.write('digraph g {')
+            for num, step in enumerate(self.order):
+                if isinstance(step[0], list):
+                    pass
+                elif isinstance(step[0], int):
+                    for i in self.pack[step[0]].diffs:
+                        if cat(i) != cat(step[1]):
+                            f.write(f'{cat(i)} -> {cat(step[1])} [label = {num}];')
+                else:
+                    f.write(f'{cat(step[0])} -> {cat(step[1])} [label = {num}];')
+            f.write('{rank=same; x0, y0, z0}')
+            f.write('{rank=same; x1, y1, z1}')
+            f.write('{rank=same; x2, y2, z2}')
+            f.write('}')
+
+        print(self.order)
+
+    def write(self):
+        for i in self.order:
+            pass
+
+    def __len__(self):
+        return len(self.pack)
+
+    def __iter__(self):
+        yield from self.pack
+
+    def __repr__(self):
+        return '{\n\t' + '\n\t'.join(repr(i) for i in self.pack) + '\n} -> ' + repr(self.solveFor)
 
 
 class CondRule:
@@ -183,9 +251,23 @@ class CondRule:
         return repr(self.crpack)
 
 
+class RuleResolvingStruct:
+    def __init__(self, idx, rule):
+        self.idx = idx
+        self.vars = set(chain(listVars(rule[0]), listVars(rule[1])))
+        self.diffs = set(chain(findDerivatives(rule[0]), findDerivatives(rule[1])))
+
+    def minus(self, set):
+        self.vars = {i for i in self.vars if i not in set}
+        self.diffs = {i for i in self.diffs if i.name not in set}
+
+    def __repr__(self):
+        return repr(self.diffs)
+
+
 class Space:
     def __init__(self):
-        self.watched = ['t']
+        self.watched = []
         self.vars = {}
         self.constinfo = {'RF': FreeVar('RF', 'double')}
         self.funcs = {}  # reserved
@@ -197,39 +279,49 @@ class Space:
     def addCondRule(self, cond, content, attrib):
         self.rules.append(CondRule((cond, content, attrib)))
 
-    class RuleResolvingStruct:
-        def __init__(self, idx, vars, diffs):
-            self.idx = idx
-            self.vars = vars
-            self.diffs = diffs
-
-    @staticmethod
-    def resolve(rule, known: list):
-        diff = rule.vars.difference(known)
-        if len(diff) is 1:
-            known.append(rule.solveFor)
-            return diff.pop()
-        elif not diff:
-            idx = next(idx for idx, x in enumerate(known) if x in rule.vars)
-            known.append(known.pop(idx))  # only pop it to the last
-            return known[-1]
-        return len(diff)  # returns how many further equations to request
-
     def process(self):
         """
         Determines the resolving order, remove potential duplicates of watched variables
         """
         print("Processing...")
         self.watched = self.removeDup(self.watched)
-        known = self.watched[:]
+        known = self.watched[:] + ['t']
         known.extend(self.constinfo)
+        rrs = [RuleResolvingStruct(idx, i.content) for idx, i in enumerate(self.rules)]
+        # must loop by reference
+        idx = 0
+        while idx < len(rrs):
+            i = rrs[idx]
+            candidates = i.vars.difference(known)
+            if len(candidates) == 1:
+                cand = candidates.pop()
+                i.solveFor = cand
+                known.append(cand)
+                idx += 1
+            elif not candidates:
+                cand_idx = next(idx for idx, x in enumerate(known) if x in i.vars)
+                i.solveFor = known[cand_idx]
+                known.append(known.pop(cand_idx))  # move cand to last
+                idx += 1
+            else:  # request more and solve together
+                i = self._get_enough(rrs, idx, known, candidates)
+                i.resolve(known)
+                idx += 1
+        self.rules = rrs
 
-        for i in self.rules:
-            solveFor = self.resolve(i, known)
-            if isinstance(solveFor, str):
-                pass
-            else:
-                raise Exception("Unimplemented")
+    @staticmethod
+    def _get_enough(rrs, idx, known, candidates):
+        rrs[idx] = RulePack(rrs[idx:idx + len(candidates)])
+        del rrs[idx + 1:idx + len(candidates)]
+        i = rrs[idx]  # rebind i
+        if len(candidates) == len(i):
+            i.solveFor = candidates
+        elif len(candidates) < len(i):
+            cand_idx = get_n_idx_in_both(known, i.vars, len(i) - len(candidates))
+            i.solveFor = known[cand_idx]
+        else:
+            return Space._get_enough(rrs, idx, known, candidates)
+        return i
 
     @staticmethod
     def removeDup(seq):

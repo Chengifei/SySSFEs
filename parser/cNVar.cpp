@@ -1,0 +1,85 @@
+#include "Python.h"
+#include "rule_types.hpp"
+#include "../common/python_common.hpp"
+
+struct cNVar : PyObject {
+    NVar var;
+};
+
+static PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
+    if (strcmp(attr_name, "name") == 0)
+        return PyUnicode_FromString(static_cast<cNVar*>(self)->var.name.c_str());
+    else if (strcmp(attr_name, "order") == 0)
+        return PyLong_FromLong(static_cast<cNVar*>(self)->var.order);
+    PyErr_Format(PyExc_AttributeError,
+                 "cNVar object has no attribute '%.400s'", attr_name);
+    return nullptr;
+}
+
+static PyObject* cNVar_repr(PyObject* self) {
+    cNVar& var = *static_cast<cNVar*>(self);
+    return PyUnicode_FromFormat("%s(%i)", var.var.name.c_str(), var.var.order);
+}
+
+static Py_hash_t cNVar_hash(PyObject* self) {
+    cNVar& var = *static_cast<cNVar*>(self);
+    return hash_value(var.var);
+}
+
+static int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
+    const char* name;
+    unsigned order;
+    if (!PyArg_ParseTuple(args, "sI", &name, &order))
+        return -1;
+    new(&(static_cast<cNVar*>(self)->var)) NVar(name, order);
+    return 0;
+}
+
+static PyTypeObject cNVarType {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    "parser.cNVar",            /* tp_name */
+    sizeof(cNVar),             /* tp_basicsize */
+    0,                         /* tp_itemsize */
+    call_destructor<cNVar>,    /* tp_dealloc */
+    0,                         /* tp_print */
+    cNVar_getattr,             /* tp_getattr */
+    0,                         /* tp_setattr */
+    0,                         /* tp_reserved */
+    cNVar_repr,                /* tp_repr */
+    0,                         /* tp_as_number */
+    0,                         /* tp_as_sequence */
+    0,                         /* tp_as_mapping */
+    cNVar_hash,                /* tp_hash  */
+    0,                         /* tp_call */
+    0,                         /* tp_str */
+    0,                         /* tp_getattro */
+    0,                         /* tp_setattro */
+    0,                         /* tp_as_buffer */
+    Py_TPFLAGS_DEFAULT,        /* tp_flags */
+    0,                         /* tp_doc */
+    0,                         /* tp_traverse */
+    0,                         /* tp_clear */
+    0,                         /* tp_richcompare */
+    0,                         /* tp_weaklistoffset */
+    0,                         /* tp_iter */
+    0,                         /* tp_iternext */
+    0,                         /* tp_methods */
+    0,                         /* tp_members */
+    0,                         /* tp_getset */
+    0,                         /* tp_base */
+    0,                         /* tp_dict */
+    0,                         /* tp_descr_get */
+    0,                         /* tp_descr_set */
+    0,                         /* tp_dictoffset */
+    cNVar_init,                /* tp_init */
+    0,                         /* tp_alloc */
+    PyType_GenericNew          /* tp_new */
+};
+
+template <class... T>
+PyObject* make_NVar(T&&... args) {
+    cNVar* inst = static_cast<cNVar*>(cNVarType.tp_alloc(&cNVarType, 0));
+    new(&inst->var) NVar(std::forward<T>(args)...);
+    return inst;
+}
+
