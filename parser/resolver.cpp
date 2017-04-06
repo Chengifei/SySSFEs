@@ -1,3 +1,10 @@
+/* Copyright 2017 by Yifei Zheng
+ * This file is part of ATOM.
+ * Unauthorized copy, modification or distribution is prohibited.
+ *
+ * This file implements routines that actually resolve the solving order.
+ */
+
 #include <utility>
 #include <iterator>
 #include <algorithm>
@@ -93,45 +100,61 @@ find_all(const std::vector<Rule>& pack, const NVar& var) {
         for (auto& Var : eqn.vars)
             if (Var.name == var.name)
                 all_forms.insert(Var.order);
-    //all_forms.erase(var.order);
     return all_forms;
 }
 
-template <class _It>
-unsigned link_derivatives(ResolvingOrder& order, _It begin, _It end, const NVar& var) {
-    // THE FUNCTION ASSUMES VAR.ORDER TO BE IN THE LIST
+unsigned RuleResolver::alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except) {
     unsigned step_count = 0;
-    auto self_it = std::lower_bound(begin, end, var.order);
-    for (auto from = self_it, to = std::next(from); to != end; ++from, ++to) {
-        order.add_step(NVar(var.name, *from), *to);
-        step_count += 1;
+    auto Pack = pack;
+    auto Requests = requests;
+    auto Except = except;
+    std::vector<Rule*> to_be_updated;
+    for (auto& rule : pack) {
+        if (rule.unknowns.size() == 1)
+            to_be_updated.push_back(&rule);
     }
-    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
-         to != std::make_reverse_iterator(begin); ++from, ++to) {
-        order.add_step(NVar(var.name, *from), *to);
+    for (auto ptr : to_be_updated) {
+        Rule& eqn = *ptr;
+        if (eqn.unknowns.empty()) {
+            requests = Requests;
+            pack = Pack;
+            except = Except;
+            order.remove(step_count);
+            throw RulePackCannotBeResolved();
+        }
+        const NVar& to_update = *eqn.unknowns.begin();
+        order.add_step(eqn.unique_id, to_update);
         step_count += 1;
+        // recurse for further variables
+        try {
+            unsigned further_steps = broadcast(to_update, requests, except);
+            step_count += further_steps;
+        }
+        catch (RulePackCannotBeResolved) {
+            requests = Requests;
+            pack = Pack;
+            except = Except;
+            order.remove(step_count);
+            throw RulePackCannotBeResolved();
+        }
     }
     return step_count;
 }
 
-unsigned
-RuleResolver::keep_consistent(NVar exact, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except) {
-    auto all_forms = find_all(pack, exact);
+unsigned RuleResolver::broadcast(const NVar& exact, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except) {
     unsigned step_count = 0;
-    auto Requests = requests;
+    auto all_forms = find_all(pack, exact);
     auto Pack = pack;
+    auto Requests = requests;
     auto Except = except;
-    // to keep consistency of the system:
-    // 1. the derivatives of the same variable must all be updated.
-    // 2. the last variable in an algebraic equation must be computed
-    //    once all the other variables are known.
-    step_count += link_derivatives(order, all_forms.cbegin(), all_forms.cend(), exact);
     for (unsigned T : all_forms) {
+        bool except_updated = false;
         NVar to(exact.name, T);
         if (!verify_then_remove(requests, to)) { // to not found in requests
-            if (!verify_then_remove(except, to)) {
-                if (requests.empty() && except.empty())
-                    continue;
+            if (verify_then_remove(except, to)) {
+                except_updated = true;
+            }
+            else {
                 requests = Requests;
                 pack = Pack;
                 except = Except;
@@ -139,7 +162,7 @@ RuleResolver::keep_consistent(NVar exact, CSF_flat_set<NVar, NVar::Less>& reques
                 throw RulePackCannotBeResolved();
             }
         }
-        if (except.count(to) == 0) // indepedent start node must not be used to solve algebraic equations.
+        if (except.count(to) == 0) { // independent start node must not be used to solve algebraic equations.
             for (Rule& eqn : find_exact(pack, to)) {
                 if (!verify_then_remove(eqn.unknowns, to)) { // attempting to update a variable twice
                     requests = Requests;
@@ -148,24 +171,38 @@ RuleResolver::keep_consistent(NVar exact, CSF_flat_set<NVar, NVar::Less>& reques
                     order.remove(step_count);
                     throw RulePackCannotBeResolved();
                 }
-                if (eqn.unknowns.size() == 1) {
-                    NVar to_update = *eqn.unknowns.begin();
-                    order.add_step(eqn.unique_id, to_update);
-                    step_count += 1;
-                    // recurse for further variables
-                    try {
-                        unsigned further_steps = keep_consistent(to_update, requests, except);
-                        step_count += further_steps;
-                    }
-                    catch (RulePackCannotBeResolved) {
-                        requests = Requests;
-                        pack = Pack;
-                        except = Except;
-                        order.remove(step_count);
-                        throw RulePackCannotBeResolved();
-                    }
-                }
             }
+        }
+        if (except_updated)
+            break;
+    }
+    auto self_it = std::lower_bound(all_forms.begin(), all_forms.end(), exact.order);
+    for (auto from = self_it, to = std::next(from); to != all_forms.end(); ++from, ++to) {
+        order.add_step(NVar(exact.name, *from), *to);
+        step_count += 1;
+    }
+    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
+         to != std::make_reverse_iterator(all_forms.begin()); ++from, ++to) {
+        order.add_step(NVar(exact.name, *from), *to);
+        step_count += 1;
+    }
+    return step_count;
+}
+
+unsigned
+RuleResolver::keep_consistent(const NVar& exact, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except) {
+    unsigned step_count = 0;
+    // to keep consistency of the system:
+    // 1. the derivatives of the same variable must all be updated.
+    // 2. the last variable in an algebraic equation must be computed
+    //    once all the other variables are known.
+    try {
+        step_count += broadcast(exact, requests, except);
+        step_count += alg_consistent(requests, except);
+    }
+    catch (RulePackCannotBeResolved) {
+        order.remove(step_count);
+        throw RulePackCannotBeResolved();
     }
     return step_count;
 }

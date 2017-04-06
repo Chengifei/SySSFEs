@@ -108,6 +108,8 @@ public:
         : pack(std::move(pack)), order(order) {}
     unsigned process(const CSF_flat_set<NVar, NVar::Less>& Requests, const CSF_set<NVar>& IndieStarts);
 private:
-    unsigned keep_consistent(NVar, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
+    unsigned alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
+    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
+    unsigned keep_consistent(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
 };
 #endif
