@@ -14,19 +14,45 @@ else:
 
 
 class Op:
-    def __init__(self, name):
+    def __init__(self, name, argc=1, writer = None):
         self.name = name
-
-    def __repr__(self):
-        return 'Op:' + self.name
+        self.argc = argc
+        self.writer = writer
 
     def __eq__(self, other):
         return self.name == other.name
 
+    def write(self, args, mixin):
+        if self.writer:
+            return self.writer(args, mixin)
+        else:
+            return '{}({})'.format(self.name, ', '.join(mixin(arg) for arg in args))
 
-class Variable:
-    def __init__(self, name):
-        self.name = name
+    def __hash__(self):
+        return hash(self.name)
+
+    def __repr__(self):
+        return 'Op:' + self.name
+
+
+def lambdify(args, mixin):
+    return '[](double time_){{return {};}}'.format(', '.join(mixin(arg) for arg in args))
+
+def op_require_function(name, make_function = lambdify):
+    return lambda args, mixin: '{}({}, time_)'.format(name, lambdify(args, mixin))
+
+
+operators = {
+    '+': Op('math::op::add', 2),
+    '-': Op('math::op::sub', 2),
+    '*': Op('math::op::mul', 2),
+    '/': Op('math::op::div', 2),
+    'pow': Op('std::pow', 2),
+    'sin': Op('std::sin', 1),
+
+    'sqrt': Op('math::sqrt', 1),
+    'diff': Op('math::fdiff', 1, op_require_function('math::fdiff')),
+}
 
 
 class exprVisitor(ParseTreeVisitor):
@@ -118,7 +144,6 @@ def stringToExpr(string):
     tree = parsetree.expression()
     return exprVisitor().visit(tree)
 
-
 def postorder(expression: tuple):
     if isinstance(expression, tuple):
         for i in expression[1][:2]:
@@ -133,7 +158,7 @@ def postorder(expression: tuple):
 
 def preorder(expression: tuple):
     if isinstance(expression, tuple):
-        yield Op(expression[0])
+        yield operators[expression[0]]
         for i in expression[1][:2]:
             yield from preorder(i)
         for i in expression[1][2:]:

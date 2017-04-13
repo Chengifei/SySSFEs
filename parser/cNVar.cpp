@@ -6,6 +6,14 @@ struct cNVar : PyObject {
     NVar var;
 };
 
+static PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
+    switch (op) {
+        case Py_EQ:
+            return PyBool_FromLong(static_cast<cNVar*>(self)->var == static_cast<cNVar*>(rhs)->var);
+    }
+    return Py_NotImplemented;
+}
+
 static PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "name") == 0)
         return PyUnicode_FromString(static_cast<cNVar*>(self)->var.name.c_str());
@@ -59,7 +67,7 @@ static PyTypeObject cNVarType {
     0,                         /* tp_doc */
     0,                         /* tp_traverse */
     0,                         /* tp_clear */
-    0,                         /* tp_richcompare */
+    cNVar_cmp,                 /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */

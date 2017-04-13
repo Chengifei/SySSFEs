@@ -9,7 +9,6 @@
 from . import expr
 from collections import OrderedDict as odict
 from itertools import chain, combinations
-import enum
 from . import resolver
 
 
@@ -20,31 +19,15 @@ class FreeVar:
         self.value = initializer
 
 
-OP_TO_INST = {
-    '+': 'ADD',
-    '-': 'SUB',
-    '*': 'MUL',
-    '/': 'DIV'
-}
-
-OP_WRITER = {
-}
+OP_TO_INST = expr.operators
 
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 
-def get_n_in_both(seq1, seq2, n) -> list:
-    """
-    Get first :param n: elements appeared both in seq1 and seq2,
-    return all if there's less than n elements, iterate on seq1.
-    """
-    it = (i for i in seq1 if i in seq2)
-    ret = []
-    for i in range(n):
-        ret.append(next(it))
-    return ret
+def removeDup(seq):
+    return list(odict.fromkeys(seq).keys())
 
 
 def get_n_idx_in_both(seq1, seq2, n) -> list:
@@ -87,44 +70,39 @@ def listVars(expr):
 
 
 class Rule:
+    ITER = 1
+
     def __init__(self, content, attribute):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
         self.attribute = attribute
 
     @staticmethod
     def writeExpr(expression: tuple):
-        for i in expr.postorder(expression):
-            if isinstance(i, expr.Op):
-                if i.name in OP_TO_INST:
-                    yield f'{OP_TO_INST[i.name]}\n'
-                else:
-                    yield f'CALL\t{i.name}\n'
-            else:
-                if isinstance(i, str):
-                    if '$' in i:
-                        name = i[1:].split('.', 1)[0]
-                        try:
-                            num = int(name)
-                            yield f'ITER\t{num}\n'
-                        except ValueError:
-                            pass
-                    i = f'VAR [{i}]'
-                yield f'PUSHI\t{i}\n'
+        if isinstance(expression, str):
+            var = expression
+            if '$' in var:
+                name, var = var[1:].split('.', 1)
+                try:
+                    Rule.ITER = max(Rule.ITER, int(name))
+                except ValueError:
+                    pass
+            return var
+        elif isinstance(expression, int):
+            return str(expression)
+        if len(expression) > 1:
+            return OP_TO_INST[expression[0]].write(expression[1], Rule.writeExpr)
+        else:
+            raise ValueError()
 
     def write(self):
-        yield from Rule.writeExpr(self.content[0])
-        yield from Rule.writeExpr(self.content[1])
-        yield 'SUB\n'
-        yield f'SOVS\t{self.solveFor}\n'
+        yield 'return math::op::sub('
+        yield self.writeExpr(self.content[0])
+        yield ',\n'
+        yield self.writeExpr(self.content[1])
+        yield ');\n'
 
     def __repr__(self):
         return f'<{self.attribute}> {self.content[0]} = {self.content[1]}'
-
-
-class EqnType(enum.IntEnum):
-    ALG_S = 1
-    ALG_M = 2
-    DIFF_S = 3
 
 
 class RulePack:
@@ -150,30 +128,22 @@ class RulePack:
 
         self.order = resolver.resolve(self.pack)
 
-        def cat(t):
-            return t.name + str(t.order)
-
-        with open('a.dot', 'w') as f:
-            f.write('digraph g {')
-            for num, step in enumerate(self.order):
-                if isinstance(step[0], list):
-                    pass
-                elif isinstance(step[0], int):
-                    for i in self.pack[step[0]].diffs:
-                        if cat(i) != cat(step[1]):
-                            f.write(f'{cat(i)} -> {cat(step[1])} [label = {num}];')
-                else:
-                    f.write(f'{cat(step[0])} -> {cat(step[1])} [label = {num}];')
-            f.write('{rank=same; x0, y0, z0}')
-            f.write('{rank=same; x1, y1, z1}')
-            f.write('{rank=same; x2, y2, z2}')
-            f.write('}')
-
-        print(self.order)
-
     def write(self):
-        for i in self.order:
-            pass
+        def cat(t):
+            return f'{t.name}_{t.order}_'
+
+        for num, step in enumerate(self.order):
+            if isinstance(step[0], list):
+                yield f'SVA\t{self.pack[step[0]]}\n'
+            elif isinstance(step[0], int):
+                yield '{0} = math::solver::solve_algebraic_single([](double {0}){{\n'.format(cat(step[1]))
+                yield from self.pack[step[0]].rule.write()
+                yield '}}, {});\n'.format(cat(step[1]))
+            else:
+                if step[1].order > step[0].order:
+                    yield f'{cat(step[1])} = ({cat(step[0])}n - {cat(step[0])})/step;\n'
+                else:
+                    yield f'math::solver::integrate_update({cat(step[0])},{cat(step[1])});\n'
 
     def __len__(self):
         return len(self.pack)
@@ -230,20 +200,22 @@ class CondRule:
             yield from rule.write()
 
     def write(self):
-        yield 'ADIF\n'
+        yield 'if ('
         yield from self.writeCond(self.crpack[0])
+        yield ') {\n'
         yield from self.writeRulePack(self.crpack[1])
+        yield '}\n'
         if not self.crpack[-2]:
             for i, j in chunker(self.crpack[2:-2], 2):
                 yield 'ADEIF\n'
                 yield from self.writeCond(i)
                 yield from self.writeRulePack(j)
-            yield 'ADEL\n'
+            yield 'else {\n'
             yield from self.writeCond(self.crpack[-2])
             yield from self.writeRulePack(self.crpack[-1])
         else:
             for i, j in chunker(self.crpack[2:], 2):
-                yield 'ADEIF\n'
+                yield 'else if('
                 yield from self.writeCond(i)
                 yield from self.writeRulePack(j)
 
@@ -254,24 +226,54 @@ class CondRule:
 class RuleResolvingStruct:
     def __init__(self, idx, rule):
         self.idx = idx
-        self.vars = set(chain(listVars(rule[0]), listVars(rule[1])))
-        self.diffs = set(chain(findDerivatives(rule[0]), findDerivatives(rule[1])))
+        self.rule = rule
+        self.vars = set(chain(listVars(rule.content[0]), listVars(rule.content[1])))
+        self.diffs = set(chain(findDerivatives(rule.content[0]), findDerivatives(rule.content[1])))
 
     def minus(self, set):
         self.vars = {i for i in self.vars if i not in set}
         self.diffs = {i for i in self.diffs if i.name not in set}
 
+    def resolve(self, known):
+        self.minus(set(known))
+        self.order = removeDup(resolver.resolve([self]))
+        print(self.order)
+
+    def write(self):
+        def cat(t):
+            return f'{t.name}_{t.order}_'
+
+        for num, step in enumerate(self.order):
+            if isinstance(step[0], list):
+                yield f'SVA\t{self.rule}\n'
+            elif isinstance(step[0], int):
+                yield '{0}n = math::solver::solve_algebraic_single([](double {0}){{\n'.format(cat(step[1]))
+                yield from self.rule.write()
+                yield '}}, {});\n'.format(cat(step[1]))
+            else:
+                if step[1].order > step[0].order:
+                    yield f'{cat(step[1])} = ({cat(step[0])}n - {cat(step[0])})/step;\n'
+                else:
+                    yield f'math::solver::integrate_update({cat(step[0])},{cat(step[1])});\n'
+
     def __repr__(self):
-        return repr(self.diffs)
+        return repr(self.rule)
 
 
 class Space:
     def __init__(self):
         self.watched = []
-        self.vars = {}
+        self.objects = odict()
+        self.vars = {"t": FreeVar('t', 'double', 1), "step": FreeVar('step', 'double', 1e-3)}
         self.constinfo = {'RF': FreeVar('RF', 'double')}
         self.funcs = {}  # reserved
         self.rules = []
+
+    def addWatch(self, name, type='double'):
+        self.watched.append(FreeVar(name, type))
+
+    def addObj(self, name, init=[]):
+        self.objects[name] = FreeVar(name, 'Object', init)
 
     def addRule(self, content, attrib):
         self.rules.append(Rule(content, attrib))
@@ -284,19 +286,17 @@ class Space:
         Determines the resolving order, remove potential duplicates of watched variables
         """
         print("Processing...")
-        self.watched = self.removeDup(self.watched)
+        self.watched = removeDup(self.watched)
         known = self.watched[:] + ['t']
         known.extend(self.constinfo)
-        rrs = [RuleResolvingStruct(idx, i.content) for idx, i in enumerate(self.rules)]
+        rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
         # must loop by reference
         idx = 0
         while idx < len(rrs):
             i = rrs[idx]
             candidates = i.vars.difference(known)
             if len(candidates) == 1:
-                cand = candidates.pop()
-                i.solveFor = cand
-                known.append(cand)
+                i.resolve(known)
                 idx += 1
             elif not candidates:
                 cand_idx = next(idx for idx, x in enumerate(known) if x in i.vars)
@@ -323,37 +323,50 @@ class Space:
             return Space._get_enough(rrs, idx, known, candidates)
         return i
 
-    @staticmethod
-    def removeDup(seq):
-        return list(odict.fromkeys(seq).keys())
-
     def write(self):
-        self.process()
-        print('Generating bytecode...', end=' ')
-        tmp = []
-        tmp.append('.def; definition of object\n')
-        for i in self.watched:
-            if i in self.varinfo:
-                tmp.append(f'VEC\t{i}\n')
-            else:
-                tmp.append(f'{i}\n')
-        tmp.append('.init:; initialize objects\n')
-        counter = 0
-        for i, V in self.varinfo.items():
-            if V.Type == 'object':
-                counter += 1
-                tmp.append(f'OBJECT\t{i}\n')
+        print('Generating code...', end=' ')
+        yield '#include "csf_includes.hpp"\n'
+        yield 'struct Object {\n'
+        for var in self.watched:
+            yield f'{var.type} {var.name};\n'
+        yield '};\n'
+        yield '\n'
+        yield f'Object storage[{len(self.objects)}]'' = {\n'
+        for V in self.objects.values():
+            yield '{'
             for lhs, rhs in V.value:
-                tmp.append(f'SET\t{lhs},{rhs}\n')
-            tmp.append(f'END\n')
-
-        yield f'NUM\t{counter}\n'
-        yield from tmp
-        yield f'PUSH\t{self.varinfo["time"].value}\n'
-        yield f'PUSH\t{self.varinfo["step"].value}\n'
-        yield '.rule:; rule definition start\n'
+                yield rhs.write()
+            yield '},\n'
+        yield '};\n'
+        yield '\n'
+        yield 'struct shared_ {\n'
+        yield 'enum object_name_ {\n'
+        yield ', '.join(str(i) for i in self.objects)
+        yield '};\n'
+        yield 'template <object_name_ i>\n'
+        yield 'Object& get(){\n'
+        yield 'return storage[i];\n'
+        yield '}\n'
+        yield '};\n'
+        yield '\n'
+        yield 'int main() {\n'
+        yield 'shared_ srd_;'
+        for i in self.vars.values():
+            if i.type == 'vector':
+                yield f'vector {i.name} = {i.value};\n'
+            else:
+                yield f'double {i.name} = {i.value};\n'
+        yield 'double time_ = 0;\n'
+        tmp = [f'while (time_ < {self.vars["t"].value})''{\n',
+               'for (comb.reset(); comb.get(0); ++comb){\n']
         for i in self.rules:
-            yield from i.write()
+            tmp.extend(i.write())
+        tmp.insert(0, f'combination<{Rule.ITER}> comb(0, {len(self.objects)});\n')
+        yield from tmp
+        yield '}\n'
+        yield 'time_ += step;\n'
+        yield '}\n'
+        yield '}\n'
         print('Done')
 
     def __repr__(self):
