@@ -3,14 +3,14 @@ import sys
 import os
 from antlr4 import ParseTreeVisitor, InputStream, CommonTokenStream
 
-if __name__ != '__main__':
-    from .exprLexer import exprLexer
-    from .exprParser import exprParser
-    from .exprVisitor import exprVisitor
-else:
-    from exprLexer import exprLexer
-    from exprParser import exprParser
-    from exprVisitor import exprVisitor
+# if __name__ != '__main__':
+from .exprLexer import exprLexer
+from .exprParser import exprParser
+from .exprVisitor import exprVisitor
+# else:
+#     from exprLexer import exprLexer
+#     from exprParser import exprParser
+#     from exprVisitor import exprVisitor
 
 
 class Op:
