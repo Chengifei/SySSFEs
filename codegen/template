@@ -1,0 +1,28 @@
+#include "atom_includes.hpp"
+struct Object {
+[[>>>]]
+};
+
+[[>>>]]
+};
+
+struct shared_ {
+    enum object_name_ {
+[[>>>]]
+    };
+    template <object_name_ i>
+    Object& get(){
+        return storage[i];
+    }
+};
+
+int main() {
+    shared_ srd_;
+    [[>>>]]
+    for (double time_ = 0; time_ < t) {
+        for (comb.reset(); comb.get(0); ++comb){
+            [[>>>]]
+        }
+        time_ += step;
+    }
+}
