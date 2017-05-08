@@ -8,7 +8,10 @@
 #ifndef ATOM_INCLUDES_HPP
 #define ATOM_INCLUDES_HPP
 #include "env.hpp"
-#include "cacher.hpp"
-#include "packed_list.hpp"
 #include "combination.hpp"
+#include "update_on_exit.hpp"
+#include <memory>
+
+template <typename T>
+using log = std::vector<std::unique_ptr<T>>;
 #endif
