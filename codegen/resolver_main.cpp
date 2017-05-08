@@ -1,8 +1,14 @@
+/* Copyright 2017 by Yifei Zheng
+ * This file is part of ATOM.
+ * Unauthorized copy, modification or distribution is prohibited.
+ *
+ * This file exports the full resolver module.
+ */
 #include "Python.h"
 #include "python_interface.hpp"
 
 static PyMethodDef ResolverMethods[] = {
-    {"resolve", resolve, METH_O, ""},
+    {"resolve", resolve, METH_VARARGS, ""},
     {nullptr}
 };
 

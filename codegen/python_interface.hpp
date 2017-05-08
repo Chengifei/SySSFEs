@@ -1,3 +1,10 @@
+/* Copyright 2017 by Yifei Zheng
+ * This file is part of ATOM.
+ * Unauthorized copy, modification or distribution is prohibited.
+ *
+ * This file defines functions that are used to convert data from and to Python.
+ */
+
 #include "Python.h"
 #include "../common/python_common.hpp"
 #include "rule_types.hpp"
@@ -47,10 +54,14 @@ PyObject* tuplize_order(const ResolvingOrder& order) {
     }
 }
 
-PyObject* resolve(PyObject*, PyObject* pack) {
+PyObject* resolve(PyObject*, PyObject* args) {
     std::vector<Rule> Pack;
     CSF_flat_set<NVar, NVar::Less> requests;
+    std::unordered_map<std::string, CSF_flat_set<unsigned>> all_forms;
     try {
+        PyObject* pack;
+        PyObject* all_forms_indexed;
+        PyOnly(PyArg_ParseTuple(args, "OO", &pack, &all_forms_indexed), true);
         unsigned sz = PyExc(PySequence_Size(pack), -1);
         Pack.reserve(sz);
         for (unsigned i = 0; i != sz; ++i) {
@@ -66,14 +77,24 @@ PyObject* resolve(PyObject*, PyObject* pack) {
             auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
             Pack.push_back(Rule(PyLong_AsLong(idx), std::move(vars)));
         }
+
+        PyObject* key, *forms;
+        Py_ssize_t pos = 0;
+        while (PyDict_Next(all_forms_indexed, &pos, &key, &forms)) {
+            const unsigned sz = PyExc(PyList_Size(forms), -1);
+            auto iter = all_forms.emplace(PyUnicode_AsUTF8(key), CSF_flat_set<unsigned>{}).first;
+            iter->second.reserve(sz);
+            for (unsigned i = 0; i != sz; ++i)
+                iter->second.insert(PyLong_AsLong(PyList_GET_ITEM(forms, i)));
+        }
     }
     catch (Python_API_Exception) {
-        PyErr_SetString(PyExc_RuntimeError, "Unknown error occurred in resolve which shouldn't throw");
+        PyErr_SetString(PyExc_RuntimeError, "Error converting python objects to C++ equivalent");
         return nullptr;
     }
     ResolvingOrder order;
     try {
-        RuleResolver Resolver(std::move(Pack), order);
+        RuleResolver Resolver(std::move(Pack), order, all_forms);
         Resolver.process(requests, {});
     }
     catch (RulePackCannotBeResolved) {

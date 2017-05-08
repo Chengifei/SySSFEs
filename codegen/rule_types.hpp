@@ -1,9 +1,17 @@
+/* Copyright 2017 by Yifei Zheng
+ * This file is part of ATOM.
+ * Unauthorized copy, modification or distribution is prohibited.
+ *
+ * This file defines a few data types that are useful to represent rules.
+ */
+
 #ifndef RULE_TYPES_HPP
 #define RULE_TYPES_HPP
 #include <string>
 #include <cstdint>
 #include <vector>
 #include "set_support.hpp"
+#include <unordered_map>
 
 enum class Type {
     DOUBLE,
@@ -103,9 +111,10 @@ struct RuleResolver {
 private:
     std::vector<Rule> pack;
     ResolvingOrder& order;
+    const std::unordered_map<std::string, CSF_flat_set<unsigned>> all_forms_indexed;
 public:
-    RuleResolver(std::vector<Rule> pack, ResolvingOrder& order)
-        : pack(std::move(pack)), order(order) {}
+    RuleResolver(std::vector<Rule> pack, ResolvingOrder& order, decltype(all_forms_indexed) all_forms_indexed)
+        : pack(std::move(pack)), order(order), all_forms_indexed(std::move(all_forms_indexed)) {}
     unsigned process(const CSF_flat_set<NVar, NVar::Less>& Requests, const CSF_set<NVar>& IndieStarts);
 private:
     unsigned alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
