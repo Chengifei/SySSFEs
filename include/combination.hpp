@@ -6,44 +6,39 @@
  */
 #ifndef COMBINATION_HPP
 #define COMBINATION_HPP
-template <unsigned size, class T = unsigned>
+#include <cstddef>
+
+template <std::size_t size>
 struct combinations {
-    T start;
-    T stop;
-    T current[size];
-    combinations(T start, T stop):
-        start(start), stop(stop) {
+    const std::size_t start, stop;
+    std::size_t current[size];
+    combinations(std::size_t start, std::size_t stop) noexcept
+        : start(start), stop(stop) {
         reset();
     }
-    void operator++() {
-        return next(size - 1);
+    // end condition: current[0] + size == stop
+    void operator++() noexcept {
+        for (std::size_t i = size - 1; i >= 0; --i) {
+            if (current[i] + (size - i) != stop) {
+                ++current[i];
+                reinit(i);
+                return;
+            }
+        }
     }
-    const T& get(unsigned i) const {
+    std::size_t get(std::size_t i) const noexcept {
         return current[i];
     }
-    void reset() {
-        auto it = start;
-        for (unsigned i = 0; i != size; ++i)
+    void reset() noexcept {
+        std::size_t it = start;
+        for (std::size_t i = 0; i != size; ++i)
             current[i] = it++;
     }
 private:
-  	void next(unsigned i) {
-        if (current[0] + size == stop)
-            current[0] = stop;
-        else {
-          	for (; i >= 0; --i) {
-              	if (current[i] + (size - i) != stop) {
-              		++current[i];
-          			break;
-                }
-            }
-  	        reinit(i);
-        }
-    }
-  	void reinit(unsigned i) {
-      	T first = current[i++];
+    void reinit(std::size_t i) noexcept {
+        std::size_t first = current[i++];
         for (; i != size; ++i)
-          	current[i] = ++first;
+            current[i] = ++first;
     }
 };
 #endif
