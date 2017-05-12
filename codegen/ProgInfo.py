@@ -3,7 +3,7 @@
 # Copyright (c) 2017 by Yifei Zheng
 # Unauthorized copy, distribution and modification of this file is prohibited.
 #
-# This file contains structures used to store data from source code, and useful
+# This file contains structures to store data from source code, and useful
 # processing routines for code generation.
 ################################################################################
 import sys, os.path
@@ -12,19 +12,8 @@ from . import templating
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
 from collections import OrderedDict as odict
-from itertools import chain, combinations
+from itertools import chain
 from . import resolver
-
-
-class FreeVar:
-    def __init__(self, name, type, initializer=None):
-        self.name = name
-        self.type = type
-        self.value = initializer
-
-
-OP_TO_INST = expr.operators
-
 
 def union_all(iterable):
     a = set()
@@ -43,11 +32,8 @@ def get_n_idx_in_both(seq1, seq2, n) -> list:
     seq1 and seq2, return all if there's less than n elements.
     Iterate on seq1.
     """
-    it = (i for i, j in enumerate(seq1) if j in seq2)
-    ret = []
-    for i in range(n):
-        ret.append(next(it))
-    return ret
+    ret = [i for i, j in enumerate(seq1) if j in seq2]
+    return ret[:n]
 
 
 def findDerivatives(expr):
@@ -76,6 +62,50 @@ def listVars(expr):
     yield from noorder(expr)
 
 
+class FreeVar:
+    def __init__(self, name, type, initializer=None):
+        self.name = name
+        self.type = type
+        self.value = initializer
+
+
+class Op:
+    def __init__(self, name, argc=1, writer=None):
+        self.name = name
+        self.argc = argc
+        self.writer = writer
+
+    def write(self, args, mixin):
+        if self.writer:
+            return self.writer(args, mixin)
+        else:
+            return '{}({})'.format(self.name, ', '.join(mixin(arg) for arg in args))
+
+    def __repr__(self):
+        return 'Op:' + self.name
+
+
+def diff_writer(args, mixin):
+    args = list(listVars(args[0]))
+    lambda_args = ['double ' + i for i in args]
+    calling_args = ['get_at_time(history, time_).get(comb_.get(0)).' + i for i in args]
+    calling_args_prev = ['get_at_time(history, time_ - step).get(comb_.get(0)).' + i for i in args]
+    return f'[]({", ".join(lambda_args)}){{ return {mixin(args[0])}; }}({", ".join(calling_args)}) - []({", ".join(lambda_args)}){{return {mixin(args[0])}; }}({", ".join(calling_args_prev)})'
+
+
+OP_TO_INST = {
+    '+': Op('math::op::add', 2),
+    '-': Op('math::op::sub', 2),
+    '*': Op('math::op::mul', 2),
+    '/': Op('math::op::div', 2),
+    'pow': Op('std::pow', 2),
+    'sin': Op('std::sin', 1),
+
+    'sqrt': Op('math::sqrt', 1),
+    'diff': Op('diff', 1, diff_writer),
+}
+
+
 class SolvingStep:
     def __init__(self, content):
         self.content = content
@@ -86,34 +116,26 @@ class SolvingStep:
         else:
             self.type = 2
 
-    def write(self, pack):
+    def write(self, space, pack):
         def cat(t):
-            return f'{t.name}_{t.order}_'
+            return f'{t.name}_{t.order}' if t.order else t.name
 
         if self.type == 0:
-            return f'math::solver::solve_algebraic_sys{pack[self.content[0]]}\n'
+            return f'math::solver::solve_algebraic_sys({pack[self.content[0]]})\n'
         elif self.type == 1:
-            return '{0} = math::solver::solve_algebraic_single([](double {0}){{\n'.format(
-                cat(self.content[1])) + pack[
-                       self.content[0]].write() + f'}}, {cat(self.content[1])});\n'
+            return 'var_with_prev<double>{0}(history.back().second->get(comb_.get(0)).{0});\n{0}= math::solver::solve_algebraic_single([&](double {0}){{\n'.format(
+                cat(self.content[1])) + pack[self.content[0]].write() \
+                   + f'}}, history.back().second->get(comb_.get(0)).{cat(self.content[1])});\n'
         else:
             if self.content[1].order > self.content[0].order:
-                return f'{cat(self.content[1])} = ({cat(self.content[0])}n - {cat(self.content[0])})/step;\n'
+                return f'double {cat(self.content[1])} = ({cat(self.content[0])} - {cat(self.content[0])}.prev()) / step;\n'
             else:
-                return f'math::solver::integrate_update({cat(self.content[0])},{cat(self.content[1])});\n'
+                return f'double {cat(self.content[0])}n += {cat(self.content[1])} * step;\n'
 
 
 class TrackedSolvingStep(SolvingStep):
     def __init__(self, content):
         super().__init__(content)
-        self.use = None
-        self.update = None
-
-
-def processSteps(rules, steps):
-    tracked_steps = []
-    for i in steps:
-        this = TrackedSolvingStep(i)
         if self.type == 0:
             self.use
             self.update
@@ -123,14 +145,20 @@ def processSteps(rules, steps):
         else:
             self.use = self.content[0]
             self.update = self.content[1]
-    
+
+
+def processSteps(rules, steps):
+    tracked_steps = []
+    for i in steps:
+        this = TrackedSolvingStep(i)
+
 
 class Rule:
+    """Simple structure that stores a rule"""
     ITER = 1
 
-    def __init__(self, content, attribute):
+    def __init__(self, content):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
-        self.attribute = attribute
 
     @staticmethod
     def writeExpr(expression: tuple):
@@ -155,36 +183,31 @@ class Rule:
             self.content[1]) + ');\n'
 
     def __repr__(self):
-        return f'<{self.attribute}> {self.content[0]} = {self.content[1]}'
+        return f'Rule {self.content[0]} = {self.content[1]}'
 
 
 class RulePack:
     """
-    This is the class representing packed rule on highest level.
-    That is, usually the pack may be divided further for actual
-    computation, as ODE, algebraic equation system, etc.
-    Thus, instances of this class are created purely by inspecting variables.
+    This is the class representing packed rule (RuleResolvingStruct) on
+    highest level. That is, the pack is divided further for actual steps,
+    e.g. solve as ODE, algebraic system, etc.
     """
 
-    def __init__(self, content):
+    def __init__(self, content, solveFor):
         self.pack = content
         self.all_forms_dict = {}
         for rule in self.pack:
             for var in rule.diffs:
                 self.all_forms_dict.setdefault(var.name, []).append(var.order)
-        self.solveFor = None
+        self.solveFor = solveFor
         self.order = None
 
-    def extend(self, iterable):
-        self.pack.extend(iterable)
-
     def resolve(self, known):
-        known = set(known)
+        known = set(known).difference(self.solveFor)
         for i in self.pack:
             i.minus(known)
 
         self.order = resolver.resolve(self.pack, self.all_forms_dict)
-        return union_all(i.vars for i in self.pack)
 
     def __len__(self):
         return len(self.pack)
@@ -265,24 +288,17 @@ class CondRule:
 
 
 class RuleResolvingStruct:
+    """Structure that holds necessary information to resolve rules to steps."""
+
     def __init__(self, idx, rule):
         self.idx = idx
         self.rule = rule
         self.vars = set(chain(listVars(rule.content[0]), listVars(rule.content[1])))
         self.diffs = set(chain(findDerivatives(rule.content[0]), findDerivatives(rule.content[1])))
-        self.all_forms_dict = None  # uninitialized here, must do immediately before resolve
 
     def minus(self, set):
         self.vars = {i for i in self.vars if i not in set}
         self.diffs = {i for i in self.diffs if i.name not in set}
-
-    def resolve(self, known):
-        self.minus(set(known))
-        self.all_forms_dict = {}
-        for var in self.diffs:
-            self.all_forms_dict.setdefault(var.name, []).append(var.order)
-        self.order = removeDup(resolver.resolve([self], self.all_forms_dict))
-        return self.vars
 
     def __repr__(self):
         return repr(self.rule)
@@ -292,26 +308,32 @@ class Space:
     def __init__(self):
         self.watched = odict()
         self.objects = odict()
-        self.vars = {"t": FreeVar('t', 'double', 1), "step": FreeVar('step', 'double', 1e-3)}
+        # FIXME: static initialization fiasco
+        self.globals = {"t": FreeVar('t', 'double', 1), "step": FreeVar('step', 'double', 1e-3)}
+        self.vars = odict()
         self.funcs = {}  # reserved
         self.rules = []
         self.steps = None
 
+    # FIXME: should issue a warning instead of silent overwriting
     def addWatch(self, name, type='double'):
         self.watched[name] = FreeVar(name, type)
 
     def addObj(self, name, init=[]):
         self.objects[name] = FreeVar(name, 'Object', init)
 
-    def addRule(self, content, attrib):
-        self.rules.append(Rule(content, attrib))
+    def declTempVar(self, name, type):
+        self.vars[name] = type
 
-    def addCondRule(self, cond, content, attrib):
-        self.rules.append(CondRule((cond, content, attrib)))
+    def addRule(self, content):
+        self.rules.append(Rule(content))
+
+    def addCondRule(self, *args):
+        self.rules.append(CondRule(args))
 
     def process(self):
         print("Processing...")
-        known = list(chain(iter(self.watched), iter(self.vars)))
+        known = list(chain(self.watched, self.globals))
         rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
 
         # must loop by reference
@@ -322,27 +344,25 @@ class Space:
             needMore = True
             while needMore:
                 candidates = rrs[Idx].vars.difference(known)
+                if not candidates:
+                    candidates = {known[get_n_idx_in_both(known, rrs[Idx].vars, 1)[0]]}
                 Idx += 1
                 solveFor += len(candidates)
                 needMore = (Idx - idx) > solveFor
-            rrs[idx] = RulePack(rrs[idx:Idx])
-            del rrs[idx + 1:Idx]
-            known.extend(rrs[idx].resolve(known))
+            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], candidates)]
+            rrs[idx].resolve(known)
+            known.extend(candidates)
             idx = Idx
 
-        self.steps = [step for pack in rrs for step in pack.order]
+        self.steps = removeDup(step for pack in rrs for step in pack.order)
 
     def write(self):
-        def object_init(obj_vals):
-            for V in obj_vals:
-                yield '{'
-                for lhs, rhs in V.value:
-                    yield rhs.write()
-                yield '},\n'
+        # FIXME: This section should be generated
         def global_vars(var_vals, iterlen, object_len):
             for i in var_vals:
                 yield f'{i.type} {i.name} = {i.value};'
-            yield f'combination<{iterlen}> comb(0, {object_len});'
+            yield f'combinations<{iterlen}> comb_(0, {object_len});'
+
         print('Generating code...')
         gen = templating.template('codegen/template')
         while True:
@@ -358,37 +378,44 @@ class Space:
                 yield n
             else:
                 break
-        yield gen.send([str(len(self.objects))])  # wrap as an iterable
+        yield gen.send(self.objects)
         while True:
             n = next(gen)
             if n is not None:
                 yield n
             else:
                 break
-        yield gen.send(object_init(self.objects.values()))
+        yield gen.send(f'obj.{var.name}' for var in self.watched.values())
         while True:
             n = next(gen)
             if n is not None:
                 yield n
             else:
                 break
-        yield gen.send([', '.join(str(i) for i in self.objects)])
+        yield gen.send(', '.join(str(i) for i in obj.value) for obj in self.objects.values())
         while True:
             n = next(gen)
             if n is not None:
                 yield n
             else:
                 break
-        yield gen.send(global_vars(self.vars.values(), 1, len(self.objects)))
+        yield gen.send(global_vars(self.globals.values(), 1, len(self.objects)))
         while True:
             n = next(gen)
             if n is not None:
                 yield n
             else:
                 break
-        yield gen.send(SolvingStep(i).write(self.rules) for i in self.steps)
+        yield gen.send([f'comb_.get(0) + 1 != {len(self.objects)}'])
+        while True:
+            n = next(gen)
+            if n is not None:
+                yield n
+            else:
+                break
+        yield gen.send(SolvingStep(i).write(self.vars, self.rules) for i in self.steps)
         yield from gen
 
     def __repr__(self):
-        return f'watched: {self.watched}\nvars: {self.vars}\nrules:\n' + '\n'.join(
+        return f'watched: {self.watched}\nvars: {self.globals}\nrules:\n' + '\n'.join(
             repr(i) for i in self.rules)
