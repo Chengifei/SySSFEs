@@ -2,7 +2,7 @@
  * This file is part of ATOM.
  * Unauthorized copy, modification or distribution is prohibited.
  *
- * This file defines a few data types that are useful to represent rules.
+ * This file defines a few data types to represent rules.
  */
 
 #ifndef RULE_TYPES_HPP
@@ -14,7 +14,7 @@
 #include <unordered_map>
 
 enum class Type {
-    DOUBLE,
+    SCALAR, VECTOR
 };
 
 enum class EqnSolver {
@@ -117,8 +117,9 @@ public:
         : pack(std::move(pack)), order(order), all_forms_indexed(std::move(all_forms_indexed)) {}
     unsigned process(const CSF_flat_set<NVar, NVar::Less>& Requests, const CSF_set<NVar>& IndieStarts);
 private:
-    unsigned alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
-    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
-    unsigned keep_consistent(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, CSF_set<NVar>& except);
+    // all functions guarantee strong exception safety
+    unsigned alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests);
+    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, const CSF_set<NVar>& except);
+    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests);
 };
 #endif

@@ -25,17 +25,17 @@ void update(C1& S1, const C2& S2) {
         S1.insert(i);
 }
 
-template <class C>
-C union_sets(const C& S1, const C& S2) {
-    C ret = S1;
+template <class C1, class C2>
+C1 union_sets(const C1& S1, const C2& S2) {
+    C1 ret = S1;
     for (auto& i: S2)
         ret.insert(i);
     return ret;
 }
 
-template <class C>
-C intersect_sets(const C& S1, const C& S2) {
-    C ret;
+template <class C1, class C2>
+C1 intersect_sets(const C1& S1, const C2& S2) {
+    C1 ret;
     for (const auto& i: S1)
         if (S2.count(i))
             ret.insert(i);

@@ -45,8 +45,8 @@ T PyExc(T t, U fail_ret) {
 }
 
 template <class T, class U>
-T PyOnly(T t, U fail_ret) {
-    if (t != fail_ret)
+T PyOnly(T t, U good_ret) {
+    if (t != good_ret)
         throw Python_API_Exception();
     return t;
 }
