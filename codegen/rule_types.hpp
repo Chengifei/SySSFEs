@@ -35,8 +35,8 @@ struct NVar {
     struct Less {
         bool operator()(const NVar& self, const NVar& rhs) const {
             if (self.name == rhs.name)
-                return self.order < rhs.order;
-            else 
+                return self.order > rhs.order;
+            else
                 return self.name < rhs.name;
         }
     };

@@ -12,29 +12,6 @@
 #include "set_support.hpp"
 #include "rule_types.hpp"
 
-struct find_exact : iter_utils::non_trivial_end_iter<find_exact> {
-    std::vector<Rule>::iterator it;
-    std::vector<Rule>::iterator End;
-    const NVar& var;
-    find_exact (std::vector<Rule>& pack, const NVar& var)
-        : it(pack.begin()), End(pack.end()), var(var) {
-        while (!exhausted() && !it->vars.count(var))
-            ++it;
-    }
-    find_exact& operator++() {
-        do {
-            ++it;
-        } while (!exhausted() && !it->vars.count(var));
-        return *this;
-    }
-    bool exhausted() {
-        return it == End;
-    }
-    Rule& get() {
-        return *it;
-    }
-};
-
 template <class C>
 std::vector<unsigned>
 find_exact_m(std::vector<Rule>& pack, const C& vars) {
