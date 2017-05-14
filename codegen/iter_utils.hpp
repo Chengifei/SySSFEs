@@ -30,7 +30,9 @@ public:
   	virtual hack_iterator<T> begin() final {
       	return hack_iterator<T>(*static_cast<T*>(this));
     }
-    virtual None end() final {}
+    virtual None end() final {
+        return None();
+    }
 };
 
 template <class T>
@@ -53,7 +55,7 @@ class range : public iter_utils::non_trivial_end_iter<range<T>> {
     T current;
     T terminal;
 public:
-    range(T begin, T end) : current(begin), terminal(end){}
+    range(T begin, T end) : current(begin), terminal(end) {}
     void operator++() {
         ++current;
     }
@@ -71,21 +73,22 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
     const iter_utils::random_iterator_view<T> pool;
     std::vector<value_type> result;
     int idx = 0;
+    const std::size_t sz;
     std::unique_ptr<unsigned[]> indices;
-    powerset(T begin, T end)
-        : pool{begin, end}, indices(std::make_unique<unsigned[]>(pool.size())) {
+    powerset(T begin, T end, std::size_t sz)
+        : pool{begin, end}, sz(sz), indices(std::make_unique<unsigned[]>(sz)) {
         indices[0] = 0;
-        result.reserve(pool.size());
+        result.reserve(sz);
         result.resize(1);
         result[idx] = pool[indices[idx]];
     }
     powerset& operator++() {
-        if (indices[idx] + (result.size() - idx) != pool.size()) {
+        if (indices[idx] + (result.size() - idx) != sz) {
             ++indices[idx];
             result[idx] = pool[indices[idx]];
             return *this;
         }
-        while (indices[idx] + (result.size() - idx) == pool.size()) {
+        while (indices[idx] + (result.size() - idx) == sz) {
             --idx;
             if (idx == -1) {
                 resize();
@@ -109,7 +112,7 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
     }
 private:
     void resize() {
-        if (result.size() != pool.size()) {
+        if (result.size() != sz) {
             idx = result.size();
             result.resize(idx + 1);
             for (unsigned _idx = 0; _idx != result.size(); ++_idx) {

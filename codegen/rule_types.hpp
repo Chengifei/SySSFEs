@@ -10,6 +10,7 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <optional>
 #include "set_support.hpp"
 #include <unordered_map>
 
@@ -111,15 +112,19 @@ struct RuleResolver {
 private:
     std::vector<Rule> pack;
     ResolvingOrder& order;
-    const std::unordered_map<std::string, CSF_flat_set<unsigned>> all_forms_indexed;
+    CSF_flat_set<NVar, NVar::Less> inits;
+    const std::unordered_map<std::string, CSF_flat_set<unsigned>>& all_forms_indexed;
 public:
-    RuleResolver(std::vector<Rule> pack, ResolvingOrder& order, decltype(all_forms_indexed) all_forms_indexed)
-        : pack(std::move(pack)), order(order), all_forms_indexed(std::move(all_forms_indexed)) {}
-    unsigned process(const CSF_flat_set<NVar, NVar::Less>& Requests, const CSF_set<NVar>& IndieStarts);
+    RuleResolver(std::vector<Rule> pack, ResolvingOrder& order, CSF_flat_set<NVar, NVar::Less> inits,
+                 const std::unordered_map<std::string, CSF_flat_set<unsigned>>& all_forms_indexed)
+        : pack(std::move(pack)), order(order), inits(std::move(inits)),
+          all_forms_indexed(all_forms_indexed) {}
+    unsigned process(const CSF_set<NVar>& start_nodes = {});
 private:
-    // all functions guarantee strong exception safety
-    unsigned alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests);
-    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests, const CSF_set<NVar>& except);
-    unsigned broadcast(const NVar&, CSF_flat_set<NVar, NVar::Less>& requests);
+    // The function throws, but if it does, nothing is modified except for pack.
+    std::optional<unsigned> alg_consistent();
+    // The function throws, but if it does, nothing is modified except for pack.
+    std::optional<unsigned> broadcast(const NVar&, const CSF_set<NVar>& except = {});
+    bool validate_resolution() const noexcept;
 };
 #endif

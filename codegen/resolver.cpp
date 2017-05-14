@@ -17,61 +17,107 @@ std::vector<unsigned>
 find_exact_m(std::vector<Rule>& pack, const C& vars) {
     std::vector<unsigned> ret;
     for (auto& rule : pack)
-        if (is_subset(vars, rule.vars))
-            ret.push_back(rule.unique_id);
+        for (const auto& var : rule.vars)
+            if (vars.count(var)) {
+                ret.push_back(rule.unique_id);
+                break;
+            }
     return ret;
 }
 
-unsigned RuleResolver::process(const CSF_flat_set<NVar, NVar::Less>& Requests,
-                               const CSF_set<NVar>& IndieStarts) {
-    for (auto variables : powerset(Requests.begin(), Requests.end())) {
-        std::vector<unsigned> occurrences = find_exact_m(pack, variables);
-        if (occurrences.size() == variables.size()) {
+bool RuleResolver::validate_resolution() const noexcept {
+    for (const Rule& eqn : pack)
+        if (!eqn.unknowns.empty())
+            return false;
+    return true;
+}
+
+#ifndef	__cpp_deduction_guides
+template <class T>
+powerset<T> make_powerset(T b, T e, std::size_t sz) {
+    return powerset<T>(b, e, sz);
+}
+#else
+#define make_powerset powerset
+#endif
+
+unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
+    for (auto new_starts : make_powerset(inits.begin(), inits.end(), pack.size())) {
+        std::vector<unsigned> occurrences = find_exact_m(pack, inits);
+        if (occurrences.size() == new_starts.size()) {
             unsigned step_count = 0;
-            if (variables.size() == 1)
-                order.add_step(occurrences[0], *variables.begin());
+            if (new_starts.size() == 1)
+                order.add_step(occurrences[0], *inits.begin());
             else
-                order.add_step(occurrences, variables);
+                order.add_step(occurrences, new_starts);
             step_count += 1;
-            std::vector<Rule> Pack = pack;
-            auto requests = Requests;
-            auto indieStarts = union_sets(IndieStarts, variables);
+            auto Pack = pack;
+            auto Starts = union_sets(starts, new_starts);
+            auto Inits = inits;
             // to keep consistency of the system:
             // 1. the derivatives of the same variable must all be updated. (broadcast)
             // 2. the last variable in an algebraic equation must be computed
             //    once all the other variables are known.
-            try {
-                for (auto var : variables) {
-                    step_count += broadcast(var, requests, indieStarts);
-                    step_count += alg_consistent(requests);
+            bool have_remaining_unknowns = false;
+            for (const auto& var : Starts) {
+                if (std::optional<unsigned> b_s = broadcast(var, Starts))
+                    step_count += *b_s;
+                else goto consistent_fail;
+                if (std::optional<unsigned> a_s = alg_consistent())
+                    step_count += *a_s;
+                else goto consistent_fail;
+consistent_fail:
+                if (validate_resolution())
+                    return step_count;
+                else {
+                    have_remaining_unknowns = true;
+                    break;
                 }
             }
-            catch (RulePackCannotBeResolved) {
-                pack = std::move(Pack);
-                order.remove(step_count);
-                continue;
-            }
-            if (!requests.empty()) {
+            if (have_remaining_unknowns)
                 try {
-                    unsigned further_steps = process(requests, indieStarts);
-                    step_count += further_steps;
+                    exclude(inits, new_starts);
+                    step_count += process(Starts);
                 }
                 catch (RulePackCannotBeResolved) {
                     pack = std::move(Pack);
                     order.remove(step_count);
+                    inits = std::move(Inits);
                     continue;
                 }
-            }
             return step_count;
         }
     }
     throw RulePackCannotBeResolved();
 }
 
-unsigned RuleResolver::alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests) {
+std::optional<unsigned> RuleResolver::broadcast(const NVar& exact, const CSF_set<NVar>& except) {
     unsigned step_count = 0;
-    auto Pack = pack;
-    auto Requests = requests;
+    bool all_succeeded = true;
+    for (Rule& eqn : pack)
+        for (const NVar& var : eqn.vars)
+            if (var.name == exact.name && except.count(var) == 0)
+                if (!verify_then_remove(eqn.unknowns, var)) // CAUTION: SIDE EFFECT
+                    all_succeeded = false; // this way, we can postpone validation until the farthest caller
+    const auto& all_forms = all_forms_indexed.at(exact.name);
+    auto self_it = std::lower_bound(all_forms.begin(), all_forms.end(), exact.order);
+    for (auto from = self_it, to = std::next(from); to != all_forms.end(); ++from, ++to) {
+        order.add_step(NVar(exact.name, *from), *to);
+        step_count += 1;
+    }
+    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
+         to != std::make_reverse_iterator(all_forms.begin()); ++from, ++to) {
+        order.add_step(NVar(exact.name, *from), *to);
+        step_count += 1;
+    }
+    std::optional<unsigned> ret;
+    if (all_succeeded)
+        ret = step_count;
+    return ret;
+}
+
+std::optional<unsigned> RuleResolver::alg_consistent() {
+    unsigned step_count = 0;
     // save the current state, or the state is changing while updating
     std::vector<Rule*> to_be_updated;
     for (auto& rule : pack) {
@@ -81,98 +127,19 @@ unsigned RuleResolver::alg_consistent(CSF_flat_set<NVar, NVar::Less>& requests) 
     for (auto ptr : to_be_updated) {
         Rule& eqn = *ptr;
         if (eqn.unknowns.empty()) {
-            requests = std::move(Requests);
-            pack = std::move(Pack);
             order.remove(step_count);
-            throw RulePackCannotBeResolved();
+            return std::optional<unsigned>();
         }
-        const NVar& to_update = *eqn.unknowns.begin();
+        NVar to_update = *eqn.unknowns.begin(); // will be deleted soon, get a copy
         order.add_step(eqn.unique_id, to_update);
         step_count += 1;
-        // recurse for further variables
-        try {
-            unsigned further_steps = broadcast(to_update, requests);
-            step_count += further_steps;
-        }
-        catch (RulePackCannotBeResolved) {
-            requests = std::move(Requests);
-            pack = std::move(Pack);
+        // recurse for the further variables
+        if (auto further = broadcast(to_update))
+            step_count += *further;
+        else {
             order.remove(step_count);
-            throw RulePackCannotBeResolved();
+            return std::optional<unsigned>();
         }
     }
-    return step_count;
-}
-
-unsigned RuleResolver::broadcast(const NVar& exact, CSF_flat_set<NVar, NVar::Less>& requests,
-                            const CSF_set<NVar>& except) {
-    unsigned step_count = 0;
-    auto Pack = pack;
-    auto Requests = requests;
-    for (Rule& eqn : pack) {
-        for (const NVar& var : eqn.vars) {
-            if (var.name == exact.name && except.count(var) == 0) {
-                if (verify_then_remove(eqn.unknowns, var)
-                    && verify_then_remove(requests, var)) {
-                    if (requests.empty())
-                        goto exit_loops;
-                }
-                else {
-                    requests = std::move(Requests);
-                    pack = std::move(Pack);
-                    order.remove(step_count);
-                    throw RulePackCannotBeResolved();
-                }
-            }
-        }
-    }
-exit_loops:
-    const auto& all_forms = all_forms_indexed.at(exact.name);
-    auto self_it = std::lower_bound(all_forms.begin(), all_forms.end(), exact.order);
-    for (auto from = self_it, to = std::next(from); to != all_forms.end(); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
-         to != std::make_reverse_iterator(all_forms.begin()); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    return step_count;
-}
-
-unsigned RuleResolver::broadcast(const NVar& exact, CSF_flat_set<NVar, NVar::Less>& requests) {
-    unsigned step_count = 0;
-    auto Pack = pack;
-    auto Requests = requests;
-    for (Rule& eqn : pack) {
-        for (const NVar& var : eqn.vars) {
-            if (var.name == exact.name) {
-                if (verify_then_remove(eqn.unknowns, var)
-                    && verify_then_remove(requests, var)) {
-                    if (requests.empty())
-                        goto exit_loops;
-                }
-                else {
-                    requests = std::move(Requests);
-                    pack = std::move(Pack);
-                    order.remove(step_count);
-                    throw RulePackCannotBeResolved();
-                }
-            }
-        }
-    }
-exit_loops:
-    const auto& all_forms = all_forms_indexed.at(exact.name);
-    auto self_it = std::lower_bound(all_forms.begin(), all_forms.end(), exact.order);
-    for (auto from = self_it, to = std::next(from); to != all_forms.end(); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
-         to != std::make_reverse_iterator(all_forms.begin()); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    return step_count;
+    return std::optional<unsigned>(step_count);
 }

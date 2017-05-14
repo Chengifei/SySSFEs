@@ -4,8 +4,10 @@
  *
  * This file exports the full resolver module.
  */
-#include "Python.h"
-#include "python_interface.hpp"
+#include "../common/python_common.hpp"
+#include "cNVar.hpp"
+
+PyObject* resolve(PyObject*, PyObject* args);
 
 static PyMethodDef ResolverMethods[] = {
     {"resolve", resolve, METH_VARARGS, ""},

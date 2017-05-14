@@ -5,10 +5,9 @@
  * This file defines functions that are used to convert data from and to Python.
  */
 
-#include "Python.h"
 #include "../common/python_common.hpp"
 #include "rule_types.hpp"
-#include "cNVar.cpp"
+#include "cNVar.hpp"
 #include <vector>
 
 PyObject* tuplize_order(const ResolvingOrder& order) {
@@ -75,7 +74,7 @@ PyObject* resolve(PyObject*, PyObject* args) {
                 vars.insert(static_cast<cNVar*>(item.get())->var);
             }
             auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
-            Pack.push_back(Rule(PyLong_AsLong(idx), std::move(vars)));
+            Pack.emplace_back(PyLong_AsLong(idx), std::move(vars));
         }
 
         PyObject* key, *forms;
@@ -93,9 +92,9 @@ PyObject* resolve(PyObject*, PyObject* args) {
         return nullptr;
     }
     ResolvingOrder order;
+    RuleResolver Resolver(std::move(Pack), order, requests, std::move(all_forms));
     try {
-        RuleResolver Resolver(std::move(Pack), order, all_forms);
-        Resolver.process(requests, {});
+        Resolver.process({});
     }
     catch (RulePackCannotBeResolved) {
         PyErr_SetString(PyExc_ValueError, "Rule pack cannot be resolved");

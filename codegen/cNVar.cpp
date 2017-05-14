@@ -1,12 +1,6 @@
-#include "Python.h"
-#include "rule_types.hpp"
-#include "../common/python_common.hpp"
+#include "cNVar.hpp"
 
-struct cNVar : PyObject {
-    NVar var;
-};
-
-static PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
+PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
     switch (op) {
         case Py_EQ:
             return PyBool_FromLong(static_cast<cNVar*>(self)->var == static_cast<cNVar*>(rhs)->var);
@@ -14,7 +8,7 @@ static PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
     return Py_NotImplemented;
 }
 
-static PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
+PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "name") == 0)
         return PyUnicode_FromString(static_cast<cNVar*>(self)->var.name.c_str());
     else if (strcmp(attr_name, "order") == 0)
@@ -24,17 +18,17 @@ static PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     return nullptr;
 }
 
-static PyObject* cNVar_repr(PyObject* self) {
+PyObject* cNVar_repr(PyObject* self) {
     cNVar& var = *static_cast<cNVar*>(self);
     return PyUnicode_FromFormat("%s(%i)", var.var.name.c_str(), var.var.order);
 }
 
-static Py_hash_t cNVar_hash(PyObject* self) {
+Py_hash_t cNVar_hash(PyObject* self) {
     cNVar& var = *static_cast<cNVar*>(self);
     return hash_value(var.var);
 }
 
-static int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
+int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
     const char* name;
     unsigned order;
     if (!PyArg_ParseTuple(args, "sI", &name, &order))
@@ -43,7 +37,7 @@ static int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
     return 0;
 }
 
-static PyTypeObject cNVarType {
+PyTypeObject cNVarType {
     PyVarObject_HEAD_INIT(NULL, 0)
     "parser.cNVar",            /* tp_name */
     sizeof(cNVar),             /* tp_basicsize */
@@ -83,11 +77,3 @@ static PyTypeObject cNVarType {
     0,                         /* tp_alloc */
     PyType_GenericNew          /* tp_new */
 };
-
-template <class... T>
-PyObject* make_NVar(T&&... args) {
-    cNVar* inst = static_cast<cNVar*>(cNVarType.tp_alloc(&cNVarType, 0));
-    new(&inst->var) NVar(std::forward<T>(args)...);
-    return inst;
-}
-

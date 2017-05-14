@@ -37,7 +37,7 @@ shared_& get_at_time(T& log, double time) {
         else
             return *std::prev(it)->second;
     }
-    return *it->second;
+    return *std::prev(it)->second;
 }
 
 int main() {
