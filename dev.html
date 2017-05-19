@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>ATOM Editor</title>
+<meta charset="UTF-8">
+<style>
+body {
+    font-family: arial,sans-serif;
+    font-size: 12pt;
+}
+
+.container {
+    display: flex;
+    background: #f2f2f2;
+    box-sizing: border-box;
+}
+
+.column {
+    min-width: 100px;
+    border: 1px dashed #dddddd;
+}
+
+footer {
+    margin-top: 1em;
+    font-size: x-small;
+    text-align: center;
+}
+
+boxtitle h2 {
+    padding: 1em 0px;
+    font-size: 14pt;
+    font-weight: bold;
+    text-align: center;
+    margin: 0 auto;
+}
+
+h1 {
+    text-align: center;
+}
+
+input {
+    margin-top: 1ex;
+    margin-bottom: 1ex;
+}
+
+textarea {
+    font-family: monospace;
+    width: 100%;
+    min-height: 600px;
+    resize: none;
+}
+
+button.type {
+    padding: 1ex;
+    background-color: #bbbbbb;
+    width: 100%;
+    border: none;
+    cursor: pointer;
+}
+
+button.type:hover {
+    background-color: #999999;
+    color: #ffffff;
+}
+
+.active {
+    background-color: #999999 !important;
+    color: #ffffff;
+}
+
+.hide {
+    display: none;
+}
+
+button.select {
+    background-color: #bbbbbb;
+    min-width: 100px;
+    color: black;
+    padding: 1ex 2ex;
+    text-decoration: none;
+    border: none;
+}
+
+button.select:hover {
+    background-color: #999999;
+}
+
+</style>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"
+        integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+        crossorigin="anonymous"></script>
+<script src="main.js"></script>
+<script>
+"use strict";
+function saveTextAsFile(filename, textToWrite) {
+    var textFileAsBlob = new Blob([ textToWrite ], { type: 'text/plain' });
+
+    var downloadLink = document.createElement("a");
+    downloadLink.download = filename;
+    downloadLink.innerHTML = "Download File";
+    if (window.webkitURL != null) {
+        // Chrome allows the link to be clicked without actually adding it to the DOM.
+        downloadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+    }
+    else {
+        // Firefox requires the link to be added to the DOM before it can be clicked.
+        downloadLink.href = window.URL.createObjectURL(textFileAsBlob);
+        downloadLink.onclick = destroyClickedElement;
+        downloadLink.style.display = "none";
+        document.body.appendChild(downloadLink);
+    }
+    downloadLink.click();
+}
+
+function destroyClickedElement(event) {
+  // remove the link from the DOM
+  document.body.removeChild(event.target);
+}
+
+var watches = {};
+
+$(document).ready(function(){
+    textbox.value='';
+    $("#reset").click(function() {
+        textbox.value='';
+        watches = {};
+    });
+    $("#save").click(function() {
+        saveTextAsFile('output.dev', textbox.value);
+    });
+    $("button.type").click(function() {
+        $("button.type").removeClass('active');
+        $(this).addClass('active');
+        $(".config").addClass('hide');
+    });
+    $("#addWatch").click(function() {        
+        var config = $("#watch-config");
+        config.toggleClass('hide');
+        config.find("#arg1").focus();
+        config.children("#add").click(function() {
+            AddWatch($("#textbox")[0]);
+        });
+        $("#array").click(function() {
+            $(this).toggleClass('active');
+            $("#array-conf").toggleClass('hide');
+        });
+        $("#const").click(function() {
+            $(this).toggleClass('active');
+        });
+        $("#complex").click(function() {
+            $(this).toggleClass('active');
+        });
+    });
+    $("#addRule").click(function() {        
+        var config = $("#rule-config");
+        config.toggleClass('hide');
+        config.find("#arg1").focus();
+        config.children("#add").click(function() {AddRule($("#textbox")[0]);});
+    });
+    $("#addObject").click(function() {        
+        var config = $("#object-config");
+        config.toggleClass('hide');
+        config.find("#arg1").focus();
+        var values = $("#values")[0];
+        for (var i in watches)
+            values.append($.parseHTML(i + ': <input type="text" placeholder>'));
+        config.children("#add").click(function() {AddObject($("#textbox")[0]);});
+    });
+    $("#addFunction").click(function() {        
+        var config = $("#function-config");
+        config.toggleClass('hide');
+        config.find("#arg1").focus();
+        config.children("#add").click(function() {AddRule($("#textbox")[0]);});
+    });
+});
+
+</script>
+</head>
+<body>
+
+<h1>ATOM Editor</h1>
+<div class="container">
+    <div class="column">
+        <div style="text-align: center;">
+        <button class="type" id="addWatch">Watch</button>
+        <button class="type" id="addRule">Rule</button>
+        <button class="type" id="addObject">Object</button>
+        <button class="type" id="addFunction">Function</button>
+        </div>
+    </div>
+    <div class="column" style="min-width: 300px">
+        <boxtitle><h2>Configuration</h2></boxtitle>
+        <div style="padding: 1ex">
+            <div id="watch-config" class="config hide">
+                Name: <input type="text" id="arg1"><br>
+                Type declarators:
+                <div style="margin: 1em 0px" id="arg2">
+                    <button class="select" id="array">array/vector</button>
+                    <div id="array-conf" class="hide">length: <input type="text" id="array-len"></div>
+                    <button class="select" id="const">const</button>
+                    <button class="select" id="complex">complex</button>
+                </div>
+                <button id="add">Add</button>
+            </div>
+            <div id="rule-config" class="config hide">
+                <div>
+                If <input type="text" id="arg1"><br><input type="text" id="arg2"><br>
+                </div>
+                <button onclick="RuleAddCond()">+</button>
+                <button id="add">Add</button>
+            </div>
+            <div id="object-config" class="config hide">
+                Name: <input type="text" id="arg1" required><br>
+                Values:<div id="values"></div>
+                <button id="add">Add</button>
+            </div>
+            <div id="function-config" class="config hide">
+                <textarea id="arg1"></textarea>
+                <button id="add">Add</button>
+            </div>
+        </div>
+    </div>
+    <div class="column" style="flex-grow: 1; padding: 1ex;">
+        <textarea id="textbox"></textarea><br>
+        <button id="save">Save</button>
+        <button id="reset">Reset</button>
+    </div>
+</div>
+
+<footer>Copyright &copy; 2017 Yifei Zheng</footer>
+
+</body>
+</html>
+
