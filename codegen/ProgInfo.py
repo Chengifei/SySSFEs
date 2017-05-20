@@ -12,7 +12,7 @@ from . import templating
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
 from collections import OrderedDict as odict
-from itertools import chain
+from itertools import chain, islice
 from . import resolver
 
 def union_all(iterable):
@@ -24,16 +24,6 @@ def union_all(iterable):
 
 def removeDup(seq):
     return list(odict.fromkeys(seq).keys())
-
-
-def get_n_idx_in_both(seq1, seq2, n) -> list:
-    """
-    Get first :param n: indices of elements appeared both in
-    seq1 and seq2, return all if there's less than n elements.
-    Iterate on seq1.
-    """
-    ret = [i for i, j in enumerate(seq1) if j in seq2]
-    return ret[:n]
 
 
 def findDerivatives(expr):
@@ -130,7 +120,15 @@ class SolvingStep:
             if self.content[1].order > self.content[0].order:
                 return f'double {cat(self.content[1])} = ({cat(self.content[0])} - {cat(self.content[0])}.prev()) / step;\n'
             else:
-                return f'double {cat(self.content[0])}n += {cat(self.content[1])} * step;\n'
+                return f'double {cat(self.content[1])} += {cat(self.content[0])} * step;\n'
+
+    def __str__(self):
+        if self.type == 0:
+            return f'ALG_M {self.content}'
+        elif self.type == 1:
+            return f'ALG_S {self.content[0]} -> {self.content[1]}'
+        else:
+            return f'DIFF_S {self.content}'
 
 
 class TrackedSolvingStep(SolvingStep):
@@ -188,9 +186,9 @@ class Rule:
 
 class RulePack:
     """
-    This is the class representing packed rule (RuleResolvingStruct) on
-    highest level. That is, the pack is divided further for actual steps,
-    e.g. solve as ODE, algebraic system, etc.
+    This is the class representing packed rules (RuleResolvingStruct) on
+    highest level. That is, the pack is resolved further to actual steps,
+    e.g. to solve as ODE or algebraic system, etc.
     """
 
     def __init__(self, content, solveFor):
@@ -200,14 +198,14 @@ class RulePack:
             for var in rule.diffs:
                 self.all_forms_dict.setdefault(var.name, []).append(var.order)
         self.solveFor = solveFor
-        self.order = None
+        self.steps = None
 
     def resolve(self, known):
-        known = set(known).difference(self.solveFor)
+        known = set(known).difference(i.name for i in self.solveFor)
         for i in self.pack:
             i.minus(known)
 
-        self.order = resolver.resolve(self.pack, self.all_forms_dict)
+        self.steps = resolver.resolve(self.pack, self.all_forms_dict)
 
     def __len__(self):
         return len(self.pack)
@@ -308,14 +306,14 @@ class Space:
     def __init__(self):
         self.watched = odict()
         self.objects = odict()
-        # FIXME: static initialization fiasco
+        # FIXME: static initialization fiasco, shall be ordered instead
         self.globals = {"t": FreeVar('t', 'double', 1), "step": FreeVar('step', 'double', 1e-3)}
         self.vars = odict()
         self.funcs = {}  # reserved
         self.rules = []
         self.steps = None
 
-    # FIXME: should issue a warning instead of silent overwriting
+    # FIXME: issue a warning instead of silent overwriting
     def addWatch(self, name, type='double'):
         self.watched[name] = FreeVar(name, type)
 
@@ -336,25 +334,41 @@ class Space:
         known = list(chain(self.watched, self.globals))
         rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
 
+        def find_candidate(known, all_vars):
+            for i in known:
+                for j in all_vars:
+                    if j.name == i:
+                        yield j
+
+        def rotate(known, update):
+            for i in update:
+                try:
+                    known.remove(i.name)
+                    known.append(i.name)
+                except ValueError:
+                    pass
+
         # must loop by reference
         idx = 0
         while idx < len(rrs):
             Idx = idx
-            solveFor = 0
+            eqn_count = 0
             needMore = True
             while needMore:
-                candidates = rrs[Idx].vars.difference(known)
-                if not candidates:
-                    candidates = {known[get_n_idx_in_both(known, rrs[Idx].vars, 1)[0]]}
                 Idx += 1
-                solveFor += len(candidates)
-                needMore = (Idx - idx) > solveFor
-            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], candidates)]
+                eqn_count += 1
+                # validate selection here
+                all_vars = union_all(i.diffs for i in rrs[idx:Idx])
+                update = {var for var in all_vars if var.name not in known}
+                needMore = len(update) > eqn_count
+            update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
+            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
             rrs[idx].resolve(known)
-            known.extend(candidates)
+            rotate(known, update)
             idx = Idx
 
-        self.steps = removeDup(step for pack in rrs for step in pack.order)
+        self.steps = removeDup(step for pack in rrs for step in pack.steps)
+        self.steps = [SolvingStep(i) for i in self.steps]
 
     def write(self):
         # FIXME: This section should be generated
@@ -413,7 +427,7 @@ class Space:
                 yield n
             else:
                 break
-        yield gen.send(SolvingStep(i).write(self.vars, self.rules) for i in self.steps)
+        yield gen.send(i.write(self.vars, self.rules) for i in self.steps)
         yield from gen
 
     def __repr__(self):
