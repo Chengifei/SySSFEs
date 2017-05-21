@@ -15,6 +15,7 @@ from collections import OrderedDict as odict
 from itertools import chain, islice
 from . import resolver
 
+
 def union_all(iterable):
     a = set()
     for i in iterable:
@@ -65,11 +66,11 @@ class Op:
         self.argc = argc
         self.writer = writer
 
-    def write(self, args, mixin):
+    def write(self, subwriter, args):
         if self.writer:
-            return self.writer(args, mixin)
+            return self.writer(subwriter, args)
         else:
-            return '{}({})'.format(self.name, ', '.join(mixin(arg) for arg in args))
+            return '{}({})'.format(self.name, ', '.join(subwriter(arg) for arg in args))
 
     def __repr__(self):
         return 'Op:' + self.name
@@ -108,19 +109,34 @@ class SolvingStep:
 
     def write(self, space, pack):
         def cat(t):
-            return f'{t.name}_{t.order}' if t.order else t.name
+            return f'{t.name}_{t.order}'
+
+        def prev(t):
+            return t + '_prev'
 
         if self.type == 0:
             return f'math::solver::solve_algebraic_sys({pack[self.content[0]]})\n'
         elif self.type == 1:
-            return 'var_with_prev<double>{0}(history.back().second->get(comb_.get(0)).{0});\n{0}= math::solver::solve_algebraic_single([&](double {0}){{\n'.format(
-                cat(self.content[1])) + pack[self.content[0]].write() \
-                   + f'}}, history.back().second->get(comb_.get(0)).{cat(self.content[1])});\n'
-        else:
-            if self.content[1].order > self.content[0].order:
-                return f'double {cat(self.content[1])} = ({cat(self.content[0])} - {cat(self.content[0])}.prev()) / step;\n'
+            if self.content[1].order == 0:
+                name = self.content[1].name
+                binding = f'double& {name} = history.back().second->get(comb_.get(0)).{name};\n'
+                binding += f'double {prev(name)} = {name};\n'
             else:
-                return f'double {cat(self.content[1])} += {cat(self.content[0])} * step;\n'
+                name = cat(self.content[1])
+                binding = f'double {name};\n'
+            seed = name
+            return binding + f'{name} = math::solver::solve_algebraic_single([&](double {name}){{\n' + pack[self.content[0]].write() + f'}}, {seed});\n'
+        else:
+            if self.content[1].order == 0:
+                name = self.content[1].name
+                binding = f'double& {name} = history.back().second->get(comb_.get(0)).{name};\n'
+                binding += f'double {prev(name)} = {name};\n'
+            else:
+                binding = f'double {cat(self.content[0])};\n'
+            if self.content[1].order > self.content[0].order:
+                return binding + f'{name} = ({cat(self.content[0])} - {cat(self.content[0])}.prev()) / step;\n'
+            else:
+                return binding + f'{name} += {cat(self.content[0])} * step;\n'
 
     def __str__(self):
         if self.type == 0:
@@ -128,32 +144,39 @@ class SolvingStep:
         elif self.type == 1:
             return f'ALG_S {self.content[0]} -> {self.content[1]}'
         else:
-            return f'DIFF_S {self.content}'
+            return f'DIFF_S {self.content[0]} -> {self.content[1]}'
 
-
-class TrackedSolvingStep(SolvingStep):
-    def __init__(self, content):
-        super().__init__(content)
+    @property
+    def update(self):
         if self.type == 0:
-            self.use
-            self.update
-        elif self.type == 1:
-            self.use = rules[self.content[1]].vars
-            self.update = self.content[1]
+            return self.content[1]
         else:
-            self.use = self.content[0]
-            self.update = self.content[1]
+            return [self.content[1]]
 
 
-def processSteps(rules, steps):
-    tracked_steps = []
+def processSteps(rules, watches, steps):
+    all_vars = union_all(RuleResolvingStruct(0, rule).diffs for rule in rules)
+    updated_VAR = set()  # this ignores the order
+    requires_further_work = set()
     for i in steps:
-        this = TrackedSolvingStep(i)
+        for var in i.update:
+            if var.order == 0:
+                updated_VAR.add(var.name)
+            else:
+                requires_further_work.add(var.name)
+    requires_further_work.intersection_update(watches)
+    # build index for the variables that requires further work
+    NVar = resolver.cNVar
+    for var in requires_further_work:
+        forms = [i.order for i in all_vars if i.name == var]
+        forms.remove(0)
+        steps.append(SolvingStep((NVar(var, min(forms)), NVar(var, 0))))
 
 
 class Rule:
     """Simple structure that stores a rule"""
     ITER = 1
+    VAR_FINDER = None
 
     def __init__(self, content):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
@@ -162,19 +185,25 @@ class Rule:
     def writeExpr(expression: tuple):
         if isinstance(expression, str):
             var = expression
+            num = 0
             if '$' in var:
                 name, var = var[1:].split('.', 1)
                 try:
-                    Rule.ITER = max(Rule.ITER, int(name))
+                    num = int(name)
+                    Rule.ITER = max(Rule.ITER, num)
                 except ValueError:
                     pass
-            return var
+            category = Rule.VAR_FINDER(var)
+            if category == 0:  # global, direct output
+                return var
+            elif category == 1:  # watched, fetch and output
+                return f'last_data_.get(comb_.get({num})).' + var
+            else:  # tmp, direct output
+                return var
         elif isinstance(expression, int):
             return str(expression)
-        if len(expression) > 1:
-            return OP_TO_INST[expression[0]].write(expression[1], Rule.writeExpr)
         else:
-            raise ValueError()
+            return OP_TO_INST[expression[0]].write(Rule.writeExpr, expression[1])
 
     def write(self):
         return 'return math::op::sub(' + self.writeExpr(self.content[0]) + ',\n' + self.writeExpr(
@@ -329,6 +358,18 @@ class Space:
     def addCondRule(self, *args):
         self.rules.append(CondRule(args))
 
+    def find_var(self, varname):
+        """
+        The return code of this function shall be consistent with those used
+        in Rule.writeExpr.
+        """
+        if varname in self.globals:
+            return 0
+        elif varname in self.watched:
+            return 1
+        elif varname in self.vars:
+            return 0
+
     def process(self):
         print("Processing...")
         known = list(chain(self.watched, self.globals))
@@ -369,6 +410,7 @@ class Space:
 
         self.steps = removeDup(step for pack in rrs for step in pack.steps)
         self.steps = [SolvingStep(i) for i in self.steps]
+        processSteps(self.rules, self.watched, self.steps)
 
     def write(self):
         # FIXME: This section should be generated
@@ -427,7 +469,8 @@ class Space:
                 yield n
             else:
                 break
-        yield gen.send(i.write(self.vars, self.rules) for i in self.steps)
+        print('\n'.join(str(i) for i in self.steps))
+        yield gen.send(i.write(self, self.rules) for i in self.steps)
         yield from gen
 
     def __repr__(self):

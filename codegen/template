@@ -28,31 +28,37 @@ S& operator<<(S& os, const shared_& srd) {
 
 template <class T>
 shared_& get_at_time(T& log, double time) {
-    double min_diff = time;
-    auto it = log.rbegin();
-    for (it != log.rend(); ++it) {
-        double diff = fabs(time - it->first);
-        if (diff < min_diff)
-            min_diff = diff;
-        else
-            return *std::prev(it)->second;
-    }
-    return *std::prev(it)->second;
+    auto it = std::lower_bound(log.begin(), log.end(), time,
+        [](const typename T::value_type& lhs, double t) { return lhs.first < t; });
+    if (it == log.end())
+        return *log.back().second;
+    else
+        return *it->second;
+}
+
+template <class T>
+shared_& back_get(T& log, std::size_t step) {
+    return *(log.rend() + step)->second;
 }
 
 int main() {
     std::unique_ptr<shared_> srd_(new shared_{
         {[[>>>]]},
     });
-    shared_* last_ptr_ = srd_.get();
     types::log<std::pair<double, std::unique_ptr<shared_>>> history;
     std::ofstream output("out.atom");
     [[>>>]]
-    for (double time_ = 0; time_ < t;) {
+    double time_ = 0;
+    history.push_back(std::make_pair(time_, std::move(srd_)));
+    srd_ = std::make_unique<shared_>();
+    time_ += step;
+    while (time_ < t) {
+        shared_& last_data_ = *history.back().second;
         for (comb_.reset(); [[>>>]]; ++comb_) {
             [[>>>]]
         }
         history.push_back(std::make_pair(time_, std::move(srd_)));
+        srd_ = std::make_unique<shared_>();
         time_ += step;
     }
 }
