@@ -7,6 +7,7 @@
 # processing routines for code generation.
 ################################################################################
 import sys, os.path
+from contextlib import contextmanager
 from . import templating
 
 sys.path.insert(0, os.path.abspath('..'))
@@ -75,13 +76,63 @@ class Op:
     def __repr__(self):
         return 'Op:' + self.name
 
+    @staticmethod
+    @contextmanager
+    def tmp_var_finder(func):
+        old_var_finder = Rule.VAR_FINDER
+        Rule.VAR_FINDER = func
+        yield
+        Rule.VAR_FINDER = old_var_finder
 
-def diff_writer(args, mixin):
-    args = list(listVars(args[0]))
-    lambda_args = ['double ' + i for i in args]
-    calling_args = ['get_at_time(history, time_).get(comb_.get(0)).' + i for i in args]
-    calling_args_prev = ['get_at_time(history, time_ - step).get(comb_.get(0)).' + i for i in args]
-    return f'[]({", ".join(lambda_args)}){{ return {mixin(args[0])}; }}({", ".join(calling_args)}) - []({", ".join(lambda_args)}){{return {mixin(args[0])}; }}({", ".join(calling_args_prev)})'
+
+def lambdify(writer, expr):
+    """
+    Hollow out an expression by isolating the expression from environment,
+    all arguments in the expression are preserved as is.
+    """
+    with Op.tmp_var_finder(lambda x: 0):
+        vars = list(listVars(expr))
+        lambda_args = ', '.join('double ' + i for i in vars)
+        return vars, f'[]({lambda_args}){{ return {writer(expr)}; }}'
+
+
+def diff_writer(subwriter, args):
+# TODO: This could be optimized, chain rule is generally slower because of the
+# extra fp multiplication. Use only when necessary (Requires hierachical change.)
+    if len(args) == 1:
+        expr = args[0]
+        wrt = 't'
+    else:
+        expr, wrt = args
+    if wrt != 't':
+        raise NotImplementedError()
+    fnow = subwriter(expr)
+    fvars, flambda = lambdify(subwriter, expr)
+# FIXME: round away from zero only, should be configurable
+    calling_args = ', '.join(f'take_step({i}, {i})' for i in fvars)
+    vnow = fvars.pop()
+    vprev = f'back_get(history, 1).get(comb_.get(0)).{vnow}'
+    return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
+
+def make_cs_diff_writer(name, cat_name): # cs stands for conditional substitution
+    def _f(subwriter, args):
+        if len(args) == 1:
+            expr = args[0]
+            wrt = 't'
+        else:
+            expr, wrt = args
+        if wrt != 't':
+            raise NotImplementedError()
+        fnow = subwriter(expr)
+        fvars, flambda = lambdify(subwriter, expr)
+        calling_args = ', '.join(f'take_step({i}, {i})' for i in fvars)
+        vnow = fvars.pop()
+        if vnow == name:
+            return f'({flambda}({calling_args}) - {fnow}) * {cat_name}'
+        else:
+            vprev = f'back_get(history, 1).get(comb_.get(0)).{vnow}'
+            return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
+    return _f
 
 
 OP_TO_INST = {
@@ -96,6 +147,12 @@ OP_TO_INST = {
     'diff': Op('diff', 1, diff_writer),
 }
 
+@contextmanager
+def tmp_op_writer(name, writer):
+    old = OP_TO_INST[name].writer
+    OP_TO_INST[name].writer = writer
+    yield
+    OP_TO_INST[name].writer = old
 
 class SolvingStep:
     def __init__(self, content):
@@ -108,6 +165,8 @@ class SolvingStep:
             self.type = 2
 
     def write(self, space, pack):
+        STEP_START = ''
+        STEP_END = ''
         def cat(t):
             return f'{t.name}_{t.order}'
 
@@ -115,28 +174,41 @@ class SolvingStep:
             return t + '_prev'
 
         if self.type == 0:
-            return f'math::solver::solve_algebraic_sys({pack[self.content[0]]})\n'
+            return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
         elif self.type == 1:
+            rule_id = self.content[0]
+            Rule.VAR_FINDER = lambda x: 0 if x == self.content[1].name else space.find_var(x)
+            solveFor = self.content[1]
             if self.content[1].order == 0:
-                name = self.content[1].name
-                binding = f'double& {name} = history.back().second->get(comb_.get(0)).{name};\n'
-                binding += f'double {prev(name)} = {name};\n'
+                name = solveFor.name
+                binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
+                binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
+                seed = prev(name)
+                return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
+                       pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
             else:
-                name = cat(self.content[1])
+                name = cat(solveFor)
                 binding = f'double {name};\n'
-            seed = name
-            return binding + f'{name} = math::solver::solve_algebraic_single([&](double {name}){{\n' + pack[self.content[0]].write() + f'}}, {seed});\n'
+                seed = name
+                # On writing ALG_S rules, chain rule must be considered if the unknown
+                # is a derivative.
+                # See make_cs_diff_writer for implementation
+                with tmp_op_writer('diff', make_cs_diff_writer(solveFor.name, cat(solveFor))):
+                    return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
+                           pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
         else:
+            Rule.VAR_FINDER = space.find_var
             if self.content[1].order == 0:
                 name = self.content[1].name
-                binding = f'double& {name} = history.back().second->get(comb_.get(0)).{name};\n'
-                binding += f'double {prev(name)} = {name};\n'
+                binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
+                binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
             else:
+                name = cat(self.content[1].name)
                 binding = f'double {cat(self.content[0])};\n'
             if self.content[1].order > self.content[0].order:
-                return binding + f'{name} = ({cat(self.content[0])} - {cat(self.content[0])}.prev()) / step;\n'
+                return STEP_START + binding + f'{name} = ({name} - {prev(name)}) / step;\n' + STEP_END
             else:
-                return binding + f'{name} += {cat(self.content[0])} * step;\n'
+                return STEP_START + binding + f'{name} = {prev(name)} + {cat(self.content[0])} * step;\n' + STEP_END
 
     def __str__(self):
         if self.type == 0:
