@@ -1,5 +1,14 @@
-#ifndef MATH_UTILS_HPP
-#define MATH_UTILS_HPP
+/* Copyright 2017 by Yifei Zheng
+ * This file is part of ATOM.
+ * Unauthorized copy, modification or distribution is prohibited.
+ *
+ * This header defines a few commonly used routines in many math headers.
+ * NOTE: this header shall NOT include other /math headers.
+ * The guarantee is made so that all the functions defined is basic and common
+ * enough for other math functions.
+ */
+#ifndef MATH_COMMON_HPP
+#define MATH_COMMON_HPP
 #include <cmath>
 #include <limits>
 #include <algorithm>
@@ -56,7 +65,7 @@ double_equal_abs_only(double A, double B,
 }
 
 template <typename T>
-int signum(T t) {
+constexpr int signum(T t) {
     if (t > 0)
         return 1;
     else if (t == 0)
@@ -66,13 +75,17 @@ int signum(T t) {
 }
 
 template <typename T>
-int fsignum(T t) {
+constexpr int fsignum(T t) {
   	T abs = fabs(t);
     if (abs <= std::numeric_limits<T>::epsilon())
         return 0;
     else if (t == abs)
         return 1;
     return -1;
+}
+
+constexpr double take_step(double d, double dir) {
+    return d + fsignum(dir) * std::max(fabs(d), 1.0) * 0x1p-20;
 }
 #endif
 
