@@ -8,13 +8,14 @@
 ################################################################################
 import sys, os.path
 from contextlib import contextmanager
+from . import resolver
+from . import manglers
 from . import templating
 
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
 from collections import OrderedDict as odict
 from itertools import chain, islice
-from . import resolver
 
 
 def union_all(iterable):
@@ -167,12 +168,8 @@ class SolvingStep:
     def write(self, space, pack):
         STEP_START = ''
         STEP_END = ''
-        def cat(t):
-            return f'{t.name}_{t.order}'
-
-        def prev(t):
-            return t + '_prev'
-
+        cat = manglers.derivative
+        prev = manglers.prev
         if self.type == 0:
             return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
         elif self.type == 1:
@@ -190,8 +187,7 @@ class SolvingStep:
                 name = cat(solveFor)
                 binding = f'double {name};\n'
                 seed = name
-                # On writing ALG_S rules, chain rule must be considered if the unknown
-                # is a derivative.
+                # chain rule must be considered if the unknown is a derivative.
                 # See make_cs_diff_writer for implementation
                 with tmp_op_writer('diff', make_cs_diff_writer(solveFor.name, cat(solveFor))):
                     return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
