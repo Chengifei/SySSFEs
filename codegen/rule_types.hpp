@@ -14,10 +14,6 @@
 #include "set_support.hpp"
 #include <unordered_map>
 
-enum class Type {
-    SCALAR, VECTOR
-};
-
 enum class EqnSolver {
     ALG_S,
     ALG_M,
@@ -26,10 +22,10 @@ enum class EqnSolver {
 
 struct NVar {
     std::string name;
-    unsigned order;
-    Type type;
+    std::size_t order;
     NVar() {}
-    NVar(std::string name, unsigned order) : name(name), order(order) {}
+    NVar(std::string name, std::size_t order)
+        : name(name), order(order) {}
     bool operator==(const NVar& rhs) const {
         return name == rhs.name && order == rhs.order;
     }
@@ -45,11 +41,11 @@ struct NVar {
 std::size_t hash_value(const NVar&);
 
 struct Rule {
-    unsigned unique_id;
+    std::size_t unique_id;
     CSF_set<NVar> vars;
     CSF_set<NVar> unknowns;
     Rule(){}
-    Rule(unsigned id, CSF_set<NVar> vars)
+    Rule(std::size_t id, CSF_set<NVar> vars)
         : unique_id(id), vars(vars), unknowns(vars) {}
 };
 
@@ -63,10 +59,10 @@ struct ResolvingOrder {
     template <EqnSolver type> class step;
     std::vector<std::unique_ptr<step_base>> seq;
     ResolvingOrder() {}
-    void add_step(unsigned, NVar);
-    void add_step(std::vector<unsigned>, std::vector<NVar>);
-    void add_step(NVar, unsigned);
-    void remove(unsigned idx) noexcept {
+    void add_step(std::size_t, NVar);
+    void add_step(std::vector<std::size_t>, std::vector<NVar>);
+    void add_step(NVar, std::size_t);
+    void remove(std::size_t idx) noexcept {
         seq.resize(seq.size() - idx);
     }
     std::size_t size() const {
@@ -77,9 +73,9 @@ struct ResolvingOrder {
 template <>
 class ResolvingOrder::step<EqnSolver::ALG_S> : public ResolvingOrder::step_base {
 public:
-    unsigned rule_id;
+    std::size_t rule_id;
     NVar solve_for;
-    step(unsigned id, NVar solve_for) : rule_id(id), solve_for(solve_for) {}
+    step(std::size_t id, NVar solve_for) : rule_id(id), solve_for(solve_for) {}
     unsigned type() const override {
         return static_cast<unsigned>(EqnSolver::ALG_S);
     }
@@ -88,9 +84,9 @@ public:
 template <>
 class ResolvingOrder::step<EqnSolver::ALG_M> : public ResolvingOrder::step_base {
 public:
-    std::vector<unsigned> rules;
+    std::vector<std::size_t> rules;
     std::vector<NVar> solve_for;
-    step(std::vector<unsigned> rules, std::vector<NVar> solve_for) : rules(rules), solve_for(solve_for) {}
+    step(std::vector<std::size_t> rules, std::vector<NVar> solve_for) : rules(std::move(rules)), solve_for(std::move(solve_for)) {}
     unsigned type() const override {
         return static_cast<unsigned>(EqnSolver::ALG_M);
     }
@@ -113,17 +109,16 @@ private:
     std::vector<Rule> pack;
     ResolvingOrder& order;
     CSF_flat_set<NVar, NVar::Less> inits;
-    const std::unordered_map<std::string, CSF_flat_set<unsigned>>& all_forms_indexed;
+    const std::unordered_map<std::string, CSF_flat_set<std::size_t>>& all_forms_indexed;
 public:
     RuleResolver(std::vector<Rule> pack, ResolvingOrder& order, CSF_flat_set<NVar, NVar::Less> inits,
-                 const std::unordered_map<std::string, CSF_flat_set<unsigned>>& all_forms_indexed)
+                 const std::unordered_map<std::string, CSF_flat_set<std::size_t>>& all_forms_indexed)
         : pack(std::move(pack)), order(order), inits(std::move(inits)),
           all_forms_indexed(all_forms_indexed) {}
     unsigned process(const CSF_set<NVar>& start_nodes = {});
 private:
-    // The function throws, but if it does, nothing is modified except for pack.
+    // The functions may fail, and they return empty optionals on fail.
     std::optional<unsigned> alg_consistent();
-    // The function throws, but if it does, nothing is modified except for pack.
     std::optional<unsigned> broadcast(const NVar&, const CSF_set<NVar>& except = {});
     bool validate_resolution() const noexcept;
 };

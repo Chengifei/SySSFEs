@@ -30,8 +30,8 @@ Py_hash_t cNVar_hash(PyObject* self) {
 
 int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
     const char* name;
-    unsigned order;
-    if (!PyArg_ParseTuple(args, "sI", &name, &order))
+    std::size_t order;
+    if (!PyArg_ParseTuple(args, "sn", &name, &order))
         return -1;
     new(&(static_cast<cNVar*>(self)->var)) NVar(name, order);
     return 0;
@@ -39,7 +39,7 @@ int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
 
 PyTypeObject cNVarType {
     PyVarObject_HEAD_INIT(NULL, 0)
-    "parser.cNVar",            /* tp_name */
+    "resolver.cNVar",          /* tp_name */
     sizeof(cNVar),             /* tp_basicsize */
     0,                         /* tp_itemsize */
     call_destructor<cNVar>,    /* tp_dealloc */

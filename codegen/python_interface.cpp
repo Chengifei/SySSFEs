@@ -15,7 +15,7 @@ PyObject* tuplize_order(const ResolvingOrder& order) {
         auto ret = PyExc(PyList_New(0), nullptr);
         for (auto& step : order.seq) {
             if (step->type() == 0) {
-                unsigned rule_id = static_cast<ResolvingOrder::step<EqnSolver::ALG_S>*>(step.get())->rule_id;
+                std::size_t rule_id = static_cast<ResolvingOrder::step<EqnSolver::ALG_S>*>(step.get())->rule_id;
                 const NVar& solve_for = static_cast<ResolvingOrder::step<EqnSolver::ALG_S>*>(step.get())->solve_for;
                 auto tuple = PyTuple_New(2);
                 PyOnly(PyTuple_SetItem(tuple, 0, PyLong_FromLong(rule_id)), 0);
@@ -28,7 +28,7 @@ PyObject* tuplize_order(const ResolvingOrder& order) {
                 auto tuple = PyTuple_New(2);
                 auto rules = PyList_New(0);
                 auto solves = PyList_New(0);
-                for (unsigned i : rule_id)
+                for (std::size_t i : rule_id)
                     PyList_Append(rules, PyLong_FromLong(i));
                 for (const NVar& i : solve_for)
                     PyList_Append(rules, make_NVar(i));
@@ -56,35 +56,27 @@ PyObject* tuplize_order(const ResolvingOrder& order) {
 PyObject* resolve(PyObject*, PyObject* args) {
     std::vector<Rule> Pack;
     CSF_flat_set<NVar, NVar::Less> requests;
-    std::unordered_map<std::string, CSF_flat_set<unsigned>> all_forms;
+    std::unordered_map<std::string, CSF_flat_set<std::size_t>> all_forms;
     try {
         PyObject* pack;
-        PyObject* all_forms_indexed;
-        PyOnly(PyArg_ParseTuple(args, "OO", &pack, &all_forms_indexed), true);
-        unsigned sz = PyExc(PySequence_Size(pack), -1);
+        PyObject* solve_for;
+        PyOnly(PyArg_ParseTuple(args, "OO", &pack, &solve_for), true);
+        std::size_t sz = PyExc(PySequence_Size(pack), -1);
         Pack.reserve(sz);
-        for (unsigned i = 0; i != sz; ++i) {
+        for (std::size_t i = 0; i != sz; ++i) {
             auto r = PyList_GET_ITEM(pack, i);
             PyScoped diffs(PyExc(PyObject_GetAttrString(r, "diffs"), nullptr));
             PyScoped iter(PyExc(PyObject_GetIter(diffs), nullptr));
             PyScoped item(PyIter_Next(iter));
             CSF_set<NVar> vars;
             for (; item; item = PyScoped(PyIter_Next(iter))) {
-                requests.insert(static_cast<cNVar*>(item.get())->var);
-                vars.insert(static_cast<cNVar*>(item.get())->var);
+                const cNVar* i = static_cast<cNVar*>(item.get());
+                requests.insert(i->var);
+                vars.insert(i->var);
+                all_forms[i->var.name].insert(i->var.order);
             }
             auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
             Pack.emplace_back(PyLong_AsLong(idx), std::move(vars));
-        }
-
-        PyObject* key, *forms;
-        Py_ssize_t pos = 0;
-        while (PyDict_Next(all_forms_indexed, &pos, &key, &forms)) {
-            const unsigned sz = PyExc(PyList_Size(forms), -1);
-            auto iter = all_forms.emplace(PyUnicode_AsUTF8(key), CSF_flat_set<unsigned>{}).first;
-            iter->second.reserve(sz);
-            for (unsigned i = 0; i != sz; ++i)
-                iter->second.insert(PyLong_AsLong(PyList_GET_ITEM(forms, i)));
         }
     }
     catch (Python_API_Exception) {

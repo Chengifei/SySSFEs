@@ -13,9 +13,8 @@
 #include "rule_types.hpp"
 
 template <class C>
-std::vector<unsigned>
-find_exact_m(std::vector<Rule>& pack, const C& vars) {
-    std::vector<unsigned> ret;
+std::vector<std::size_t> find_exact_m(std::vector<Rule>& pack, const C& vars) {
+    std::vector<std::size_t> ret;
     for (auto& rule : pack)
         for (const auto& var : rule.vars)
             if (vars.count(var)) {
@@ -43,7 +42,7 @@ powerset<T> make_powerset(T b, T e, std::size_t sz) {
 
 unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
     for (auto new_starts : make_powerset(inits.begin(), inits.end(), pack.size())) {
-        std::vector<unsigned> occurrences = find_exact_m(pack, inits);
+        std::vector<std::size_t> occurrences = find_exact_m(pack, inits);
         if (occurrences.size() == new_starts.size()) {
             unsigned step_count = 0;
             if (new_starts.size() == 1)
@@ -118,7 +117,7 @@ std::optional<unsigned> RuleResolver::broadcast(const NVar& exact, const CSF_set
 
 std::optional<unsigned> RuleResolver::alg_consistent() {
     unsigned step_count = 0;
-    // save the current state, or the state is changing while updating
+    // save the current state, or the state might change while updating
     std::vector<Rule*> to_be_updated;
     for (auto& rule : pack) {
         if (rule.unknowns.size() == 1)

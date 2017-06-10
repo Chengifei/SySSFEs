@@ -29,37 +29,24 @@ def removeDup(seq):
     return list(odict.fromkeys(seq).keys())
 
 
-def findDerivatives(expr):
-    def customorder(expression, DIFF=0):
-        if isinstance(expression, tuple):
-            if expression[0] == 'diff':
-                DIFF += 1
-            for i in expression[1]:
-                yield from customorder(i, DIFF)
-            if expression[0] == 'diff':
-                DIFF -= 1
-        elif isinstance(expression, str):
-            yield resolver.cNVar(expression, DIFF)
-
-    yield from customorder(expr)
-
-
 def listVars(expr):
-    def noorder(expression):
-        if isinstance(expression, tuple):
-            for i in expression[1]:
-                yield from noorder(i)
-        elif isinstance(expression, str):
-            yield expression
-
-    yield from noorder(expr)
+    if isinstance(expr, tuple):
+        for i in expr[1]:
+            yield from listVars(i)
+    elif isinstance(expr, str):
+        yield manglers.strip_mem(expr)
 
 
-class FreeVar:
-    def __init__(self, name, type, initializer=None):
+class Variable:
+    CTX_GLOBAL = 0
+    CTX_MEM = 1
+    CTX_TMP = 2
+
+    def __init__(self, name, type, ctx, initializer=None):
         self.name = name
         self.type = type
         self.value = initializer
+        self.ctx = ctx
 
 
 class Op:
@@ -98,8 +85,8 @@ def lambdify(writer, expr):
 
 
 def diff_writer(subwriter, args):
-# TODO: This could be optimized, chain rule is generally slower because of the
-# extra fp multiplication. Use only when necessary (Requires hierachical change.)
+    # TODO: This could be optimized, chain rule is generally slower because of the
+    # extra fp multiplication. Use only when necessary (Requires hierachical change.)
     if len(args) == 1:
         expr = args[0]
         wrt = 't'
@@ -109,13 +96,14 @@ def diff_writer(subwriter, args):
         raise NotImplementedError()
     fnow = subwriter(expr)
     fvars, flambda = lambdify(subwriter, expr)
-# FIXME: round away from zero only, should be configurable
+    # FIXME: round away from zero only, should be configurable
     calling_args = ', '.join(f'take_step({i}, {i})' for i in fvars)
     vnow = fvars.pop()
-    vprev = f'back_get(history, 1).get(comb_.get(0)).{vnow}'
+    vprev = f'last_data_.get(comb_.get(0)).{vnow}'
     return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
 
-def make_cs_diff_writer(name, cat_name): # cs stands for conditional substitution
+
+def make_cs_diff_writer(name, cat_name):  # cs stands for conditional substitution
     def _f(subwriter, args):
         if len(args) == 1:
             expr = args[0]
@@ -131,8 +119,9 @@ def make_cs_diff_writer(name, cat_name): # cs stands for conditional substitutio
         if vnow == name:
             return f'({flambda}({calling_args}) - {fnow}) * {cat_name}'
         else:
-            vprev = f'back_get(history, 1).get(comb_.get(0)).{vnow}'
+            vprev = f'last_data_.get(comb_.get(0)).{vnow}'
             return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
+
     return _f
 
 
@@ -148,12 +137,14 @@ OP_TO_INST = {
     'diff': Op('diff', 1, diff_writer),
 }
 
+
 @contextmanager
 def tmp_op_writer(name, writer):
     old = OP_TO_INST[name].writer
     OP_TO_INST[name].writer = writer
     yield
     OP_TO_INST[name].writer = old
+
 
 class SolvingStep:
     def __init__(self, content):
@@ -290,10 +281,6 @@ class RulePack:
 
     def __init__(self, content, solveFor):
         self.pack = content
-        self.all_forms_dict = {}
-        for rule in self.pack:
-            for var in rule.diffs:
-                self.all_forms_dict.setdefault(var.name, []).append(var.order)
         self.solveFor = solveFor
         self.steps = None
 
@@ -302,7 +289,7 @@ class RulePack:
         for i in self.pack:
             i.minus(known)
 
-        self.steps = resolver.resolve(self.pack, self.all_forms_dict)
+        self.steps = resolver.resolve(self.pack, self.solveFor)
 
     def __len__(self):
         return len(self.pack)
@@ -385,11 +372,26 @@ class CondRule:
 class RuleResolvingStruct:
     """Structure that holds necessary information to resolve rules to steps."""
 
+    @staticmethod
+    def findDerivatives(expression, DIFF=0):
+        if isinstance(expression, tuple):
+            if expression[0] == 'diff':
+                DIFF += 1
+            for i in expression[1]:
+                yield from RuleResolvingStruct.findDerivatives(i, DIFF)
+            if expression[0] == 'diff':
+                DIFF -= 1
+        elif isinstance(expression, str):
+            expression = manglers.strip_mem(expression)
+            yield resolver.cNVar(expression, DIFF)
+
     def __init__(self, idx, rule):
         self.idx = idx
         self.rule = rule
-        self.vars = set(chain(listVars(rule.content[0]), listVars(rule.content[1])))
-        self.diffs = set(chain(findDerivatives(rule.content[0]), findDerivatives(rule.content[1])))
+        findDerivatives = RuleResolvingStruct.findDerivatives
+        self.diffs = set(chain(findDerivatives(rule.content[0]),
+                               findDerivatives(rule.content[1])))
+        self.vars = {i.name for i in self.diffs}
 
     def minus(self, set):
         self.vars = {i for i in self.vars if i not in set}
@@ -404,7 +406,10 @@ class Space:
         self.watched = odict()
         self.objects = odict()
         # FIXME: static initialization fiasco, shall be ordered instead
-        self.globals = {"t": FreeVar('t', 'double', 1), "step": FreeVar('step', 'double', 1e-3)}
+        self.globals = {
+            "t": Variable('t', 'double', Variable.CTX_GLOBAL, 1),
+            "step": Variable('step', 'double', Variable.CTX_GLOBAL, 1e-3)
+        }
         self.vars = odict()
         self.funcs = {}  # reserved
         self.rules = []
@@ -412,10 +417,10 @@ class Space:
 
     # FIXME: issue a warning instead of silent overwriting
     def addWatch(self, name, type='double'):
-        self.watched[name] = FreeVar(name, type)
+        self.watched[name] = Variable(name, type, Variable.CTX_MEM)
 
     def addObj(self, name, init=[]):
-        self.objects[name] = FreeVar(name, 'Object', init)
+        self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
 
     def declTempVar(self, name, type):
         self.vars[name] = type
@@ -436,7 +441,8 @@ class Space:
         elif varname in self.watched:
             return 1
         elif varname in self.vars:
-            return 0
+            return 2
+        raise ValueError()
 
     def process(self):
         print("Processing...")
@@ -467,7 +473,7 @@ class Space:
                 Idx += 1
                 eqn_count += 1
                 # validate selection here
-                all_vars = union_all(i.diffs for i in rrs[idx:Idx])
+                all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
                 update = {var for var in all_vars if var.name not in known}
                 needMore = len(update) > eqn_count
             update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
