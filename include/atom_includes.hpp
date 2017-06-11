@@ -9,7 +9,6 @@
 #define ATOM_INCLUDES_HPP
 #include "env.hpp"
 #include "combination.hpp"
-#include "var_with_prev.hpp"
 #include <memory>
 #include <vector>
 #include <fstream>

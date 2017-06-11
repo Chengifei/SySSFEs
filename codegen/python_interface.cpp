@@ -71,12 +71,17 @@ PyObject* resolve(PyObject*, PyObject* args) {
             CSF_set<NVar> vars;
             for (; item; item = PyScoped(PyIter_Next(iter))) {
                 const cNVar* i = static_cast<cNVar*>(item.get());
-                requests.insert(i->var);
                 vars.insert(i->var);
                 all_forms[i->var.name].insert(i->var.order);
             }
             auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
             Pack.emplace_back(PyLong_AsLong(idx), std::move(vars));
+        }
+        PyScoped iter(PyExc(PyObject_GetIter(solve_for), nullptr));
+        PyScoped item(PyIter_Next(iter));
+        for (; item; item = PyScoped(PyIter_Next(iter))) {
+            const cNVar* i = static_cast<cNVar*>(item.get());
+            requests.insert(i->var);
         }
     }
     catch (Python_API_Exception) {

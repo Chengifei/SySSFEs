@@ -14,15 +14,8 @@ from . import templating
 
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
-from collections import OrderedDict as odict
+from collections import OrderedDict as odict, defaultdict
 from itertools import chain, islice
-
-
-def union_all(iterable):
-    a = set()
-    for i in iterable:
-        a.update(i)
-    return a
 
 
 def removeDup(seq):
@@ -34,7 +27,7 @@ def listVars(expr):
         for i in expr[1]:
             yield from listVars(i)
     elif isinstance(expr, str):
-        yield manglers.strip_mem(expr)
+        yield expr
 
 
 class Variable:
@@ -55,38 +48,39 @@ class Op:
         self.argc = argc
         self.writer = writer
 
-    def write(self, subwriter, args):
+    def write(self, args):
         if self.writer:
-            return self.writer(subwriter, args)
+            return self.writer(args)
         else:
-            return '{}({})'.format(self.name, ', '.join(subwriter(arg) for arg in args))
+            return '{}({})'.format(self.name, ', '.join(Rule.writeExpr(arg) for arg in args))
 
     def __repr__(self):
         return 'Op:' + self.name
 
-    @staticmethod
-    @contextmanager
-    def tmp_var_finder(func):
-        old_var_finder = Rule.VAR_FINDER
-        Rule.VAR_FINDER = func
-        yield
-        Rule.VAR_FINDER = old_var_finder
+
+@contextmanager
+def tmp_var_writer(func):
+    old_var_writer = Rule.VAR_WRITER
+    Rule.VAR_WRITER = func
+    yield
+    Rule.VAR_WRITER = old_var_writer
 
 
-def lambdify(writer, expr):
+def lambdify(expr):
     """
     Hollow out an expression by isolating the expression from environment,
     all arguments in the expression are preserved as is.
     """
-    with Op.tmp_var_finder(lambda x: 0):
+    with tmp_var_writer(lambda x: manglers.split_mem(x)[1] if manglers.is_mem(x) else x):
         vars = list(listVars(expr))
-        lambda_args = ', '.join('double ' + i for i in vars)
-        return vars, f'[]({lambda_args}){{ return {writer(expr)}; }}'
+        lambda_args = ', '.join('double ' + manglers.strip_mem(i) for i in vars)
+        return vars, f'[]({lambda_args}){{ return {Rule.writeExpr(expr)}; }}'
 
 
-def diff_writer(subwriter, args):
+def diff_writer(args):
     # TODO: This could be optimized, chain rule is generally slower because of the
     # extra fp multiplication. Use only when necessary (Requires hierachical change.)
+    # FIXME: The separation of the two functions greatly hurts maintainability.
     if len(args) == 1:
         expr = args[0]
         wrt = 't'
@@ -94,17 +88,17 @@ def diff_writer(subwriter, args):
         expr, wrt = args
     if wrt != 't':
         raise NotImplementedError()
-    fnow = subwriter(expr)
-    fvars, flambda = lambdify(subwriter, expr)
+    fnow = Rule.writeExpr(expr)
+    fvars, flambda = lambdify(expr)
     # FIXME: round away from zero only, should be configurable
-    calling_args = ', '.join(f'take_step({i}, {i})' for i in fvars)
-    vnow = fvars.pop()
+    calling_args = ', '.join(f'take_step({manglers.write_var(i)}, {manglers.write_var(i)})' for i in fvars)
+    vnow = manglers.write_var(fvars.pop())
     vprev = f'last_data_.get(comb_.get(0)).{vnow}'
     return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
 
 
-def make_cs_diff_writer(name, cat_name):  # cs stands for conditional substitution
-    def _f(subwriter, args):
+def make_cs_diff_writer(NVar):  # cs stands for conditional substitution
+    def _f(args):
         if len(args) == 1:
             expr = args[0]
             wrt = 't'
@@ -112,14 +106,16 @@ def make_cs_diff_writer(name, cat_name):  # cs stands for conditional substituti
             expr, wrt = args
         if wrt != 't':
             raise NotImplementedError()
-        fnow = subwriter(expr)
-        fvars, flambda = lambdify(subwriter, expr)
-        calling_args = ', '.join(f'take_step({i}, {i})' for i in fvars)
-        vnow = fvars.pop()
-        if vnow == name:
-            return f'({flambda}({calling_args}) - {fnow}) * {cat_name}'
+        fnow = Rule.writeExpr(expr)
+        fvars, flambda = lambdify(expr)
+        calling_args = ', '.join(
+            f'take_step({manglers.write_var(i)}, {manglers.write_var(i)})' for i in fvars)
+        var = fvars.pop()
+        vnow = manglers.write_var(var)
+        if manglers.strip_mem(var) == NVar.name:
+            return f'({flambda}({calling_args}) - {fnow}) * {manglers.derivative(NVar)}'
         else:
-            vprev = f'last_data_.get(comb_.get(0)).{vnow}'
+            vprev = manglers.mem_prev(var, 2)
             return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
 
     return _f
@@ -165,26 +161,25 @@ class SolvingStep:
             return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
         elif self.type == 1:
             rule_id = self.content[0]
-            Rule.VAR_FINDER = lambda x: 0 if x == self.content[1].name else space.find_var(x)
             solveFor = self.content[1]
-            if self.content[1].order == 0:
-                name = solveFor.name
-                binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
-                binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
-                seed = prev(name)
-                return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
-                       pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
-            else:
-                name = cat(solveFor)
-                binding = f'double {name};\n'
-                seed = name
-                # chain rule must be considered if the unknown is a derivative.
-                # See make_cs_diff_writer for implementation
-                with tmp_op_writer('diff', make_cs_diff_writer(solveFor.name, cat(solveFor))):
+            with tmp_var_writer(lambda x: x if x == solveFor.name else manglers.write_var(x)):
+                if self.content[1].order == 0:
+                    name = solveFor.name
+                    binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
+                    binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
+                    seed = prev(name)
                     return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
                            pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
+                else:
+                    name = cat(solveFor)
+                    binding = f'double {name};\n'
+                    seed = name
+                    # chain rule must be considered if the unknown is a derivative.
+                    # See make_cs_diff_writer for implementation
+                    with tmp_op_writer('diff', make_cs_diff_writer(solveFor)):
+                        return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
+                               pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
         else:
-            Rule.VAR_FINDER = space.find_var
             if self.content[1].order == 0:
                 name = self.content[1].name
                 binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
@@ -206,36 +201,18 @@ class SolvingStep:
             return f'DIFF_S {self.content[0]} -> {self.content[1]}'
 
     @property
-    def update(self):
+    def updates(self):
         if self.type == 0:
             return self.content[1]
         else:
             return [self.content[1]]
 
 
-def processSteps(rules, watches, steps):
-    all_vars = union_all(RuleResolvingStruct(0, rule).diffs for rule in rules)
-    updated_VAR = set()  # this ignores the order
-    requires_further_work = set()
-    for i in steps:
-        for var in i.update:
-            if var.order == 0:
-                updated_VAR.add(var.name)
-            else:
-                requires_further_work.add(var.name)
-    requires_further_work.intersection_update(watches)
-    # build index for the variables that requires further work
-    NVar = resolver.cNVar
-    for var in requires_further_work:
-        forms = [i.order for i in all_vars if i.name == var]
-        forms.remove(0)
-        steps.append(SolvingStep((NVar(var, min(forms)), NVar(var, 0))))
-
-
 class Rule:
     """Simple structure that stores a rule"""
     ITER = 1
-    VAR_FINDER = None
+
+    VAR_WRITER = manglers.write_var
 
     def __init__(self, content):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
@@ -243,26 +220,11 @@ class Rule:
     @staticmethod
     def writeExpr(expression: tuple):
         if isinstance(expression, str):
-            var = expression
-            num = 0
-            if '$' in var:
-                name, var = var[1:].split('.', 1)
-                try:
-                    num = int(name)
-                    Rule.ITER = max(Rule.ITER, num)
-                except ValueError:
-                    pass
-            category = Rule.VAR_FINDER(var)
-            if category == 0:  # global, direct output
-                return var
-            elif category == 1:  # watched, fetch and output
-                return f'last_data_.get(comb_.get({num})).' + var
-            else:  # tmp, direct output
-                return var
+            return Rule.VAR_WRITER(expression)
         elif isinstance(expression, int):
             return str(expression)
         else:
-            return OP_TO_INST[expression[0]].write(Rule.writeExpr, expression[1])
+            return OP_TO_INST[expression[0]].write(expression[1])
 
     def write(self):
         return 'return math::op::sub(' + self.writeExpr(self.content[0]) + ',\n' + self.writeExpr(
@@ -431,19 +393,6 @@ class Space:
     def addCondRule(self, *args):
         self.rules.append(CondRule(args))
 
-    def find_var(self, varname):
-        """
-        The return code of this function shall be consistent with those used
-        in Rule.writeExpr.
-        """
-        if varname in self.globals:
-            return 0
-        elif varname in self.watched:
-            return 1
-        elif varname in self.vars:
-            return 2
-        raise ValueError()
-
     def process(self):
         print("Processing...")
         known = list(chain(self.watched, self.globals))
@@ -484,7 +433,20 @@ class Space:
 
         self.steps = removeDup(step for pack in rrs for step in pack.steps)
         self.steps = [SolvingStep(i) for i in self.steps]
-        processSteps(self.rules, self.watched, self.steps)
+
+        # finalize the steps, ensure update are propagated to watched values.
+        updated_forms = defaultdict(set)
+        for step in self.steps:
+            for var in step.updates:
+                updated_forms[var.name].add(var.order)
+        update_not_fully_propagated = {}
+        for var, forms in updated_forms.items():
+            if min(forms) != 0 and var in self.watched:
+                update_not_fully_propagated[var] = min(forms)
+        # propagate the update to its watched base
+        NVar = resolver.cNVar
+        for var, min_idx in update_not_fully_propagated.items():
+            self.steps.append(SolvingStep((NVar(var, min_idx), NVar(var, 0))))
 
     def write(self):
         # FIXME: This section should be generated
