@@ -106,17 +106,14 @@ def make_cs_diff_writer(NVar):  # cs stands for conditional substitution
             expr, wrt = args
         if wrt != 't':
             raise NotImplementedError()
-        fnow = Rule.writeExpr(expr)
         fvars, flambda = lambdify(expr)
-        calling_args = ', '.join(
-            f'take_step({manglers.write_var(i)}, {manglers.write_var(i)})' for i in fvars)
         var = fvars.pop()
         vnow = manglers.write_var(var)
         if manglers.strip_mem(var) == NVar.name:
-            return f'({flambda}({calling_args}) - {fnow}) * {manglers.derivative(NVar)}'
+            return f'math::calculus::fdiff({flambda}, {vnow}) * {manglers.derivative(NVar)}'
         else:
             vprev = manglers.mem_prev(var, 2)
-            return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
+            return f'math::calculus::fdiff({flambda}, {vnow}) * ({vnow} - {vprev}) / step'
 
     return _f
 
@@ -155,42 +152,30 @@ class SolvingStep:
     def write(self, space, pack):
         STEP_START = ''
         STEP_END = ''
-        cat = manglers.derivative
-        prev = manglers.prev
         if self.type == 0:
             return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
         elif self.type == 1:
-            rule_id = self.content[0]
-            solveFor = self.content[1]
+            rule_id, solveFor = self.content
             with tmp_var_writer(lambda x: x if x == solveFor.name else manglers.write_var(x)):
-                if self.content[1].order == 0:
-                    name = solveFor.name
+                name = solveFor.name
+                if solveFor.order == 0:  # an ultimate request
                     binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
                     binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
-                    seed = prev(name)
+                    seed = manglers.prev(name)
                     return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
                            pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
-                else:
-                    name = cat(solveFor)
-                    binding = f'double {name};\n'
-                    seed = name
+                else:  # request from diff
+                    derivative_name = manglers.derivative(solveFor)
+                    seed = derivative_name
                     # chain rule must be considered if the unknown is a derivative.
                     # See make_cs_diff_writer for implementation
                     with tmp_op_writer('diff', make_cs_diff_writer(solveFor)):
-                        return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
-                               pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
+                        return f'[](double t, double {name}){{' \
+                               + f'return math::solver::algebraic_single([&](double {derivative_name}){{\n' \
+                               + pack[rule_id].write() + f'}}, {seed}); }}'
         else:
-            if self.content[1].order == 0:
-                name = self.content[1].name
-                binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
-                binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
-            else:
-                name = cat(self.content[1].name)
-                binding = f'double {cat(self.content[0])};\n'
-            if self.content[1].order > self.content[0].order:
-                return STEP_START + binding + f'{name} = ({name} - {prev(name)}) / step;\n' + STEP_END
-            else:
-                return STEP_START + binding + f'{name} = {prev(name)} + {cat(self.content[0])} * step;\n' + STEP_END
+            base, name = self.content
+            return STEP_START + f'srd_->get(comb_.get(0)).{name} = math::solver::differential({base.write(space, pack)}, time_, {name}, step);\n' + STEP_END
 
     def __str__(self):
         if self.type == 0:
@@ -198,7 +183,7 @@ class SolvingStep:
         elif self.type == 1:
             return f'ALG_S {self.content[0]} -> {self.content[1]}'
         else:
-            return f'DIFF_S {self.content[0]} -> {self.content[1]}'
+            return f'DIFF_S ({self.content[0]}) -> {self.content[1]}'
 
     @property
     def updates(self):
@@ -247,17 +232,13 @@ class RulePack:
         self.steps = None
 
     def resolve(self, known):
-        known = set(known).difference(i.name for i in self.solveFor)
+        known = set(known).difference(manglers.strip_mem(i.name) for i in self.solveFor)
         for i in self.pack:
-            i.minus(known)
+            # exclude known variables
+            i.diffs = {var for var in i.diffs if manglers.strip_mem(var.name) not in known}
 
         self.steps = resolver.resolve(self.pack, self.solveFor)
 
-    def __len__(self):
-        return len(self.pack)
-
-    def __iter__(self):
-        yield from self.pack
 
     def __repr__(self):
         return '{\n\t' + '\n\t'.join(repr(i) for i in self.pack) + '\n} -> ' + repr(self.solveFor)
@@ -344,7 +325,6 @@ class RuleResolvingStruct:
             if expression[0] == 'diff':
                 DIFF -= 1
         elif isinstance(expression, str):
-            expression = manglers.strip_mem(expression)
             yield resolver.cNVar(expression, DIFF)
 
     def __init__(self, idx, rule):
@@ -353,11 +333,10 @@ class RuleResolvingStruct:
         findDerivatives = RuleResolvingStruct.findDerivatives
         self.diffs = set(chain(findDerivatives(rule.content[0]),
                                findDerivatives(rule.content[1])))
-        self.vars = {i.name for i in self.diffs}
 
-    def minus(self, set):
-        self.vars = {i for i in self.vars if i not in set}
-        self.diffs = {i for i in self.diffs if i.name not in set}
+    @property
+    def vars(self):
+        return set(chain(listVars(self.rule.content[0]), listVars(self.rule.content[1])))
 
     def __repr__(self):
         return repr(self.rule)
@@ -401,7 +380,7 @@ class Space:
         def find_candidate(known, all_vars):
             for i in known:
                 for j in all_vars:
-                    if j.name == i:
+                    if manglers.strip_mem(j.name) == i:
                         yield j
 
         def rotate(known, update):
@@ -423,7 +402,7 @@ class Space:
                 eqn_count += 1
                 # validate selection here
                 all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
-                update = {var for var in all_vars if var.name not in known}
+                update = {var for var in all_vars if manglers.strip_mem(var.name) not in known}
                 needMore = len(update) > eqn_count
             update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
             rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
@@ -435,18 +414,18 @@ class Space:
         self.steps = [SolvingStep(i) for i in self.steps]
 
         # finalize the steps, ensure update are propagated to watched values.
-        updated_forms = defaultdict(set)
-        for step in self.steps:
-            for var in step.updates:
-                updated_forms[var.name].add(var.order)
-        update_not_fully_propagated = {}
-        for var, forms in updated_forms.items():
-            if min(forms) != 0 and var in self.watched:
-                update_not_fully_propagated[var] = min(forms)
+        updated_variables = {var: idx for idx, step in enumerate(self.steps) for var in
+                             step.updates}
+        update_not_propagated = set()
+        for NVar in updated_variables:
+            var, form = NVar.name, NVar.order
+            if form != 0 and var in self.watched:
+                update_not_propagated.add(NVar)
         # propagate the update to its watched base
-        NVar = resolver.cNVar
-        for var, min_idx in update_not_fully_propagated.items():
-            self.steps.append(SolvingStep((NVar(var, min_idx), NVar(var, 0))))
+        for NVar in update_not_propagated:
+            idx = updated_variables[NVar]
+            base_step = self.steps[idx]
+            self.steps[idx] = SolvingStep((base_step, NVar.name))
 
     def write(self):
         # FIXME: This section should be generated

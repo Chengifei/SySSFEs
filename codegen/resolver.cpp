@@ -41,14 +41,17 @@ powerset<T> make_powerset(T b, T e, std::size_t sz) {
 #endif
 
 unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
+    // TODO: Independent starts selection shall be deterministic, then we can
+    // even eliminate optionals.
+    // HACK: The choice of starts is WRONG, shall be eqn-based.
     for (auto new_starts : make_powerset(inits.begin(), inits.end(), pack.size())) {
         std::vector<std::size_t> occurrences = find_exact_m(pack, inits);
         if (occurrences.size() == new_starts.size()) {
             unsigned step_count = 0;
             if (new_starts.size() == 1)
-                order.add_step(occurrences[0], *inits.begin());
+                order.add_alg(occurrences[0], *inits.begin());
             else
-                order.add_step(occurrences, new_starts);
+                order.add_alg_sys(occurrences, new_starts);
             step_count += 1;
             auto Pack = pack;
             auto Starts = union_sets(starts, new_starts);
@@ -59,9 +62,8 @@ unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
             //    once all the other variables are known.
             bool have_remaining_unknowns = false;
             for (const auto& var : Starts) {
-                if (std::optional<unsigned> b_s = broadcast(var, Starts))
-                    step_count += *b_s;
-                else goto consistent_fail;
+                if (!broadcast(var, Starts))
+                    goto consistent_fail;
                 if (std::optional<unsigned> a_s = alg_consistent())
                     step_count += *a_s;
                 else goto consistent_fail;
@@ -90,29 +92,14 @@ consistent_fail:
     throw RulePackCannotBeResolved();
 }
 
-std::optional<unsigned> RuleResolver::broadcast(const NVar& exact, const CSF_set<NVar>& except) {
-    unsigned step_count = 0;
+bool RuleResolver::broadcast(const NVar& exact, const CSF_set<NVar>& except) {
     bool all_succeeded = true;
     for (Rule& eqn : pack)
         for (const NVar& var : eqn.vars)
             if (var.name == exact.name && except.count(var) == 0)
                 if (!verify_then_remove(eqn.unknowns, var)) // CAUTION: SIDE EFFECT
                     all_succeeded = false; // this way, we can postpone validation until the farthest caller
-    const auto& all_forms = all_forms_indexed.at(exact.name);
-    auto self_it = std::lower_bound(all_forms.begin(), all_forms.end(), exact.order);
-    for (auto from = self_it, to = std::next(from); to != all_forms.end(); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    for (auto from = std::make_reverse_iterator(++self_it), to = std::next(from);
-         to != std::make_reverse_iterator(all_forms.begin()); ++from, ++to) {
-        order.add_step(NVar(exact.name, *from), *to);
-        step_count += 1;
-    }
-    std::optional<unsigned> ret;
-    if (all_succeeded)
-        ret = step_count;
-    return ret;
+    return all_succeeded;
 }
 
 std::optional<unsigned> RuleResolver::alg_consistent() {
@@ -130,12 +117,10 @@ std::optional<unsigned> RuleResolver::alg_consistent() {
             return std::optional<unsigned>();
         }
         NVar to_update = *eqn.unknowns.begin(); // will be deleted soon, get a copy
-        order.add_step(eqn.unique_id, to_update);
+        order.add_alg(eqn.unique_id, to_update);
         step_count += 1;
         // recurse for the further variables
-        if (auto further = broadcast(to_update))
-            step_count += *further;
-        else {
+        if (!broadcast(to_update)) {
             order.remove(step_count);
             return std::optional<unsigned>();
         }

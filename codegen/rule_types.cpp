@@ -9,14 +9,10 @@ std::size_t hash_value(const NVar& self) {
     return hash & ~0b111 | self.order;
 }
 
-void ResolvingOrder::add_step(std::size_t r, NVar v) {
-    seq.emplace_back(new step<EqnSolver::ALG_S>(r, v));
+void ResolvingOrder::add_alg(std::size_t r, NVar v) {
+    seq.emplace_back(new step<EqnSolver::ALG_S>(r, std::move(v)));
 }
 
-void ResolvingOrder::add_step(std::vector<std::size_t> rs, std::vector<NVar> vs) {
-    seq.emplace_back(new step<EqnSolver::ALG_M>(rs, vs));
-}
-
-void ResolvingOrder::add_step(NVar var, std::size_t to) {
-    seq.emplace_back(new step<EqnSolver::DIFF_S>(var, NVar(var.name, to)));
+void ResolvingOrder::add_alg_sys(std::vector<std::size_t> rs, std::vector<NVar> vs) {
+    seq.emplace_back(new step<EqnSolver::ALG_M>(std::move(rs), std::move(vs)));
 }
