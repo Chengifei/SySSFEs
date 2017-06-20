@@ -38,6 +38,19 @@ def is_mem(s):
     return re.match(r'\$.+\.', s.strip())
 
 
+def var_match(s1, s2):
+    if is_mem(s1) and is_mem(s2):
+        s1, s2 = split_mem(s1), split_mem(s2)
+        if s1[1] == s2[1]:
+            return s1[0] == s2[0] or s1[0] == '*' or s2[0] == '*'
+    else:
+        return s1 == s2
+
+
+def generic_mem(s):
+    return '$*.' + s
+
+
 def mem_last(s):
     idx, attr = split_mem(s)
     return f'last_data_.get(comb_.get({idx})).{attr}'

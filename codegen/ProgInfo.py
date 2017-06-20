@@ -71,7 +71,7 @@ def lambdify(expr):
     Hollow out an expression by isolating the expression from environment,
     all arguments in the expression are preserved as is.
     """
-    with tmp_var_writer(lambda x: manglers.split_mem(x)[1] if manglers.is_mem(x) else x):
+    with tmp_var_writer(lambda x: manglers.strip_mem(x)):
         vars = list(listVars(expr))
         lambda_args = ', '.join('double ' + manglers.strip_mem(i) for i in vars)
         return vars, f'[]({lambda_args}){{ return {Rule.writeExpr(expr)}; }}'
@@ -109,8 +109,8 @@ def make_cs_diff_writer(NVar):  # cs stands for conditional substitution
         fvars, flambda = lambdify(expr)
         var = fvars.pop()
         vnow = manglers.write_var(var)
-        if manglers.strip_mem(var) == NVar.name:
-            return f'math::calculus::fdiff({flambda}, {vnow}) * {manglers.derivative(NVar)}'
+        if var == NVar.name:
+            return f'math::calculus::fdiff({flambda}, {vnow}) * {manglers.fetch_mem(manglers.derivative(NVar))}'
         else:
             vprev = manglers.mem_prev(var, 2)
             return f'math::calculus::fdiff({flambda}, {vnow}) * ({vnow} - {vprev}) / step'
@@ -175,7 +175,7 @@ class SolvingStep:
                                + pack[rule_id].write() + f'}}, {seed}); }}'
         else:
             base, name = self.content
-            return STEP_START + f'srd_->get(comb_.get(0)).{name} = math::solver::differential({base.write(space, pack)}, time_, {name}, step);\n' + STEP_END
+            return STEP_START + f'srd_->get(comb_.get(0)).{name} = math::solver::differential({base.write(space, pack)}, time_, {manglers.mem_last(name)}, step);\n' + STEP_END
 
     def __str__(self):
         if self.type == 0:
@@ -232,10 +232,10 @@ class RulePack:
         self.steps = None
 
     def resolve(self, known):
-        known = set(known).difference(manglers.strip_mem(i.name) for i in self.solveFor)
+        to_remove = {var for var in known if not any(manglers.var_match(svar.name, var) for svar in self.solveFor)}
         for i in self.pack:
             # exclude known variables
-            i.diffs = {var for var in i.diffs if manglers.strip_mem(var.name) not in known}
+            i.diffs = {var for var in i.diffs if not any(manglers.var_match(kvar, var.name) for kvar in to_remove)}
 
         self.steps = resolver.resolve(self.pack, self.solveFor)
 
@@ -358,7 +358,7 @@ class Space:
 
     # FIXME: issue a warning instead of silent overwriting
     def addWatch(self, name, type='double'):
-        self.watched[name] = Variable(name, type, Variable.CTX_MEM)
+        self.watched[manglers.generic_mem(name)] = Variable(name, type, Variable.CTX_MEM)
 
     def addObj(self, name, init=[]):
         self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
@@ -380,14 +380,15 @@ class Space:
         def find_candidate(known, all_vars):
             for i in known:
                 for j in all_vars:
-                    if manglers.strip_mem(j.name) == i:
+                    if manglers.var_match(i, j.name):
                         yield j
 
         def rotate(known, update):
             for i in update:
+                generic_name = manglers.generic_mem(manglers.strip_mem(i.name))
                 try:
-                    known.remove(i.name)
-                    known.append(i.name)
+                    known.remove(generic_name)
+                    known.append(generic_name)
                 except ValueError:
                     pass
 
@@ -402,7 +403,7 @@ class Space:
                 eqn_count += 1
                 # validate selection here
                 all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
-                update = {var for var in all_vars if manglers.strip_mem(var.name) not in known}
+                update = {var for var in all_vars if not any(manglers.var_match(kvar, var.name) for kvar in known)}
                 needMore = len(update) > eqn_count
             update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
             rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
@@ -419,7 +420,8 @@ class Space:
         update_not_propagated = set()
         for NVar in updated_variables:
             var, form = NVar.name, NVar.order
-            if form != 0 and var in self.watched:
+            generic_name = manglers.generic_mem(manglers.strip_mem(var))
+            if form != 0 and generic_name in self.watched:
                 update_not_propagated.add(NVar)
         # propagate the update to its watched base
         for NVar in update_not_propagated:
