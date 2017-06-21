@@ -15,14 +15,16 @@ struct shared_ {
 
 template <class S>
 S& operator<<(S& os, const Object& obj) {
-    os << [[>>>]];
+    os << [[>>>]] << " ";
+    os.seekp(-1, std::ios_base::end);
     return os;
 }
 
 template <class S>
 S& operator<<(S& os, const shared_& srd) {
     for (unsigned i = 0; i != sizeof(shared_) / sizeof(Object); ++i)
-        os << srd.get(i);
+        os << srd.get(i) << "; ";
+    os.seekp(-1, std::ios_base::end);
     return os;
 }
 
@@ -38,14 +40,14 @@ shared_& get_at_time(T& log, double time) {
 
 template <class T>
 shared_& back_get(T& log, std::size_t step) {
-    return *(log.rend() + step)->second;
+    return *(log.end() - step)->second;
 }
 
 int main() {
+    types::log<std::pair<double, std::unique_ptr<shared_>>> history;
     std::unique_ptr<shared_> srd_(new shared_{
         {[[>>>]]},
     });
-    types::log<std::pair<double, std::unique_ptr<shared_>>> history;
     std::ofstream output("out.atom");
     [[>>>]]
     double time_ = 0;
@@ -53,12 +55,18 @@ int main() {
     srd_ = std::make_unique<shared_>();
     time_ += step;
     while (time_ < t) {
+        // we must do this at beginning instead of ending, to ensure consistency
         shared_& last_data_ = *history.back().second;
-        for (comb_.reset(); [[>>>]]; ++comb_) {
+        history.push_back(std::make_pair(time_, std::make_unique<shared_>()));
+        shared_* srd_ = history.back().second.get();
+
+        comb_.reset();
+        do {
             [[>>>]]
-        }
-        history.push_back(std::make_pair(time_, std::move(srd_)));
-        srd_ = std::make_unique<shared_>();
+        } while (++comb_);
+
+        output << time_ << ": " << *srd_ << "\n";
+
         time_ += step;
     }
 }

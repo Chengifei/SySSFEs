@@ -14,7 +14,7 @@ from . import templating
 
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
-from collections import OrderedDict as odict, defaultdict
+from collections import OrderedDict as odict
 from itertools import chain, islice
 
 
@@ -30,6 +30,127 @@ def listVars(expr):
         yield expr
 
 
+class Space:
+    def __init__(self):
+        self.watched = odict()
+        self.objects = odict()
+        # FIXME: static initialization fiasco, shall be ordered instead
+        self.globals = {
+            "t": Variable('t', 'double', Variable.CTX_GLOBAL, 1),
+            "step": Variable('step', 'double', Variable.CTX_GLOBAL, 1e-3)
+        }
+        self.vars = odict()
+        self.funcs = {}  # reserved
+        self.rules = []
+        self.steps = None
+
+    # FIXME: issue a warning instead of silent overwriting
+    def addWatch(self, name, type='double'):
+        self.watched[manglers.generic_mem(name)] = Variable(name, type, Variable.CTX_MEM)
+
+    def addObj(self, name, init=[]):
+        self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
+
+    def declTempVar(self, name, type):
+        self.vars[name] = type
+
+    def addRule(self, content):
+        self.rules.append(Rule(content))
+
+    def addCondRule(self, *args):
+        self.rules.append(CondRule(args))
+
+    def process(self):
+        print("Processing...")
+        known = list(chain(self.watched, self.globals))
+        rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
+
+        def find_candidate(known, all_vars):
+            for i in known:
+                for j in all_vars:
+                    if manglers.var_match(i, j.name):
+                        yield j
+
+        def rotate(known, update):
+            for i in update:
+                generic_name = manglers.generic_mem(manglers.strip_mem(i.name))
+                try:
+                    known.remove(generic_name)
+                    known.append(generic_name)
+                except ValueError:
+                    pass
+
+        # must loop by reference
+        idx = 0
+        while idx < len(rrs):
+            Idx = idx
+            eqn_count = 0
+            needMore = True
+            while needMore:
+                Idx += 1
+                eqn_count += 1
+                # validate selection here
+                all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
+                update = {var for var in all_vars if
+                          not any(manglers.var_match(kvar, var.name) for kvar in known)}
+                needMore = len(update) > eqn_count
+            update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
+            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
+            rrs[idx].resolve(known)
+            rotate(known, update)
+            idx = Idx
+
+        self.steps = removeDup(step for pack in rrs for step in pack.steps)
+        self.steps = [SolvingStep(i) for i in self.steps]
+
+        # finalize the steps, ensure update are propagated to watched values.
+        updated_variables = {var: idx for idx, step in enumerate(self.steps) for var in
+                             step.updates}
+        update_not_propagated = set()
+        for NVar in updated_variables:
+            var, form = NVar.name, NVar.order
+            generic_name = manglers.generic_mem(manglers.strip_mem(var))
+            if form != 0 and generic_name in self.watched:
+                update_not_propagated.add(NVar)
+        # propagate the update to its watched base
+        for NVar in update_not_propagated:
+            idx = updated_variables[NVar]
+            base_step = self.steps[idx]
+            self.steps[idx] = SolvingStep((base_step, NVar.name))
+
+    def write(self):
+        # FIXME: This section should be generated
+        def global_vars(var_vals, iterlen, object_len):
+            for i in var_vals:
+                yield f'{i.type} {i.name} = {i.value};'
+            yield f'combinations<{iterlen}> comb_(0, {object_len});'
+
+        print('Generating code...')
+        gen = templating.template('codegen/template')
+
+        def consume(gen, send):
+            while True:
+                n = next(gen)
+                if n is not None:
+                    yield n
+                else:
+                    yield gen.send(send)
+                    break
+
+        yield from consume(gen, (f'{var.type} {var.name};' for var in self.watched.values()))
+        yield from consume(gen, self.objects)
+        yield from consume(gen, (f'obj.{var.name}' for var in self.watched.values()))
+        yield from consume(gen,
+                           (', '.join(str(i) for i in obj.value) for obj in self.objects.values()))
+        yield from consume(gen, global_vars(self.globals.values(), 1, len(self.objects)))
+        yield from consume(gen, (i.write(self, self.rules) for i in self.steps))
+        yield from gen
+
+    def __repr__(self):
+        return f'watched: {self.watched}\nvars: {self.globals}\nrules:\n' + '\n'.join(
+            repr(i) for i in self.rules)
+
+
 class Variable:
     CTX_GLOBAL = 0
     CTX_MEM = 1
@@ -39,7 +160,6 @@ class Variable:
         self.name = name
         self.type = type
         self.value = initializer
-        self.ctx = ctx
 
 
 class Op:
@@ -156,26 +276,28 @@ class SolvingStep:
             return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
         elif self.type == 1:
             rule_id, solveFor = self.content
-            with tmp_var_writer(lambda x: x if x == solveFor.name else manglers.write_var(x)):
-                name = solveFor.name
-                if solveFor.order == 0:  # an ultimate request
-                    binding = f'double& {name} = srd_->get(comb_.get(0)).{name};\n'
-                    binding += f'double {prev(name)} = last_data_.get(comb_.get(0)).{name};\n'
-                    seed = manglers.prev(name)
-                    return STEP_START + binding + f'{name} = math::solver::algebraic_single([&](double {name}){{\n' + \
+            name = solveFor.name
+            if solveFor.order == 0:  # an ultimate request
+                # TODO: This part is broken
+                with tmp_var_writer(lambda x: x if x == name else manglers.write_var(x)):
+                    bind = manglers.mem_cur(name)
+                    seed = manglers.mem_last(name)
+                    return STEP_START + f'{bind} = math::solver::algebraic_single([&](double {name}){{\n' + \
                            pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
-                else:  # request from diff
-                    derivative_name = manglers.derivative(solveFor)
-                    seed = derivative_name
-                    # chain rule must be considered if the unknown is a derivative.
-                    # See make_cs_diff_writer for implementation
+            else:  # request from diff
+                derivative_name = manglers.fetch_mem(manglers.derivative(solveFor))
+                seed = 0
+                # chain rule must be considered if the unknown is a derivative.
+                # See make_cs_diff_writer for implementation
+                with tmp_var_writer(lambda x: manglers.fetch_mem(name) if x == name else manglers.write_var(x)):
                     with tmp_op_writer('diff', make_cs_diff_writer(solveFor)):
-                        return f'[](double t, double {name}){{' \
+                        return f'[&](double t, double {manglers.fetch_mem(name)}){{' \
                                + f'return math::solver::algebraic_single([&](double {derivative_name}){{\n' \
                                + pack[rule_id].write() + f'}}, {seed}); }}'
         else:
-            base, name = self.content
-            return STEP_START + f'srd_->get(comb_.get(0)).{name} = math::solver::differential({base.write(space, pack)}, time_, {manglers.mem_last(name)}, step);\n' + STEP_END
+            base, var = self.content
+            return STEP_START + f'{manglers.mem_cur(var)} = math::solver::differential(\n' \
+                   + f'{base.write(space, pack)}, time_, {manglers.mem_last(var)}, step).first;\n' + STEP_END
 
     def __str__(self):
         if self.type == 0:
@@ -238,7 +360,6 @@ class RulePack:
             i.diffs = {var for var in i.diffs if not any(manglers.var_match(kvar, var.name) for kvar in to_remove)}
 
         self.steps = resolver.resolve(self.pack, self.solveFor)
-
 
     def __repr__(self):
         return '{\n\t' + '\n\t'.join(repr(i) for i in self.pack) + '\n} -> ' + repr(self.solveFor)
@@ -340,156 +461,3 @@ class RuleResolvingStruct:
 
     def __repr__(self):
         return repr(self.rule)
-
-
-class Space:
-    def __init__(self):
-        self.watched = odict()
-        self.objects = odict()
-        # FIXME: static initialization fiasco, shall be ordered instead
-        self.globals = {
-            "t": Variable('t', 'double', Variable.CTX_GLOBAL, 1),
-            "step": Variable('step', 'double', Variable.CTX_GLOBAL, 1e-3)
-        }
-        self.vars = odict()
-        self.funcs = {}  # reserved
-        self.rules = []
-        self.steps = None
-
-    # FIXME: issue a warning instead of silent overwriting
-    def addWatch(self, name, type='double'):
-        self.watched[manglers.generic_mem(name)] = Variable(name, type, Variable.CTX_MEM)
-
-    def addObj(self, name, init=[]):
-        self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
-
-    def declTempVar(self, name, type):
-        self.vars[name] = type
-
-    def addRule(self, content):
-        self.rules.append(Rule(content))
-
-    def addCondRule(self, *args):
-        self.rules.append(CondRule(args))
-
-    def process(self):
-        print("Processing...")
-        known = list(chain(self.watched, self.globals))
-        rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
-
-        def find_candidate(known, all_vars):
-            for i in known:
-                for j in all_vars:
-                    if manglers.var_match(i, j.name):
-                        yield j
-
-        def rotate(known, update):
-            for i in update:
-                generic_name = manglers.generic_mem(manglers.strip_mem(i.name))
-                try:
-                    known.remove(generic_name)
-                    known.append(generic_name)
-                except ValueError:
-                    pass
-
-        # must loop by reference
-        idx = 0
-        while idx < len(rrs):
-            Idx = idx
-            eqn_count = 0
-            needMore = True
-            while needMore:
-                Idx += 1
-                eqn_count += 1
-                # validate selection here
-                all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
-                update = {var for var in all_vars if not any(manglers.var_match(kvar, var.name) for kvar in known)}
-                needMore = len(update) > eqn_count
-            update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
-            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
-            rrs[idx].resolve(known)
-            rotate(known, update)
-            idx = Idx
-
-        self.steps = removeDup(step for pack in rrs for step in pack.steps)
-        self.steps = [SolvingStep(i) for i in self.steps]
-
-        # finalize the steps, ensure update are propagated to watched values.
-        updated_variables = {var: idx for idx, step in enumerate(self.steps) for var in
-                             step.updates}
-        update_not_propagated = set()
-        for NVar in updated_variables:
-            var, form = NVar.name, NVar.order
-            generic_name = manglers.generic_mem(manglers.strip_mem(var))
-            if form != 0 and generic_name in self.watched:
-                update_not_propagated.add(NVar)
-        # propagate the update to its watched base
-        for NVar in update_not_propagated:
-            idx = updated_variables[NVar]
-            base_step = self.steps[idx]
-            self.steps[idx] = SolvingStep((base_step, NVar.name))
-
-    def write(self):
-        # FIXME: This section should be generated
-        def global_vars(var_vals, iterlen, object_len):
-            for i in var_vals:
-                yield f'{i.type} {i.name} = {i.value};'
-            yield f'combinations<{iterlen}> comb_(0, {object_len});'
-
-        print('Generating code...')
-        gen = templating.template('codegen/template')
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send(f'{var.type} {var.name};' for var in self.watched.values())
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send(self.objects)
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send(f'obj.{var.name}' for var in self.watched.values())
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send(', '.join(str(i) for i in obj.value) for obj in self.objects.values())
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send(global_vars(self.globals.values(), 1, len(self.objects)))
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        yield gen.send([f'comb_.get(0) + 1 != {len(self.objects)}'])
-        while True:
-            n = next(gen)
-            if n is not None:
-                yield n
-            else:
-                break
-        print('\n'.join(str(i) for i in self.steps))
-        yield gen.send(i.write(self, self.rules) for i in self.steps)
-        yield from gen
-
-    def __repr__(self):
-        return f'watched: {self.watched}\nvars: {self.globals}\nrules:\n' + '\n'.join(
-            repr(i) for i in self.rules)
