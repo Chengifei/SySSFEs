@@ -5,9 +5,13 @@
 #
 # This file contains structures to store data from source code, and useful
 # processing routines for code generation.
+#
+# WARNING ## DATA CORRUPTION MAY OCCUR ## CAUTION
+# DO NOT RUN COMPILER IN PARALLEL IN CURRENT RELEASE
+# THE FILE CONTAINS BAD USAGE PATTERN OF GLOBAL VARIABLE USED FOR TESTING.
 ################################################################################
 import sys, os.path
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 from . import resolver
 from . import manglers
 from . import templating
@@ -30,6 +34,18 @@ def listVars(expr):
         yield expr
 
 
+def findDerivatives(expression, DIFF=0):
+    if isinstance(expression, tuple):
+        if expression[0] == 'diff':
+            DIFF += 1
+        for i in expression[1]:
+            yield from findDerivatives(i, DIFF)
+        if expression[0] == 'diff':
+            DIFF -= 1
+    elif isinstance(expression, str):
+        yield resolver.cNVar(expression, DIFF)
+
+
 class Space:
     def __init__(self):
         self.watched = odict()
@@ -48,7 +64,7 @@ class Space:
     def addWatch(self, name, type='double'):
         self.watched[manglers.generic_mem(name)] = Variable(name, type, Variable.CTX_MEM)
 
-    def addObj(self, name, init=[]):
+    def addObj(self, name, init):
         self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
 
     def declTempVar(self, name, type):
@@ -162,6 +178,11 @@ class Variable:
         self.value = initializer
 
 
+# WE LEAVE A GLOBAL VARIABLE HERE WHICH IS BAD
+# TODO: ONCE TESTED, ENCAPSULATE IT IN A CLASS
+STEP_BYPRODUCT = {}
+
+
 class Op:
     def __init__(self, name, argc=1, writer=None):
         self.name = name
@@ -179,28 +200,37 @@ class Op:
 
 
 @contextmanager
-def tmp_var_writer(func):
-    old_var_writer = Rule.VAR_WRITER
-    Rule.VAR_WRITER = func
+def write_var_as(on, replace):
+    old = Rule.VAR_WRITER.get(on)
+    Rule.VAR_WRITER[on] = replace
     yield
-    Rule.VAR_WRITER = old_var_writer
+    if old:
+        Rule.VAR_WRITER[on] = old
+    else:
+        del Rule.VAR_WRITER[on]
 
 
-def lambdify(expr):
+def lambdify(expr, vars):
     """
-    Hollow out an expression by isolating the expression from environment,
-    all arguments in the expression are preserved as is.
+    Convert an expression into lambda. Caller shall ensure all arguments of the lambda shall be
+    compatible with target naming restrictions. All arguments are written through proper_write_var.
     """
-    with tmp_var_writer(lambda x: manglers.strip_mem(x)):
-        vars = list(listVars(expr))
-        lambda_args = ', '.join('double ' + manglers.strip_mem(i) for i in vars)
-        return vars, f'[]({lambda_args}){{ return {Rule.writeExpr(expr)}; }}'
+    lambda_args = ', '.join('double ' + Rule.proper_write_var(i) for i in vars)
+    return f'[]({lambda_args}){{ return {Rule.writeExpr(expr)}; }}'
+
+
+DIFF_CHAIN = set()
+
+
+@contextmanager
+def register_diff_chain_wrt(var):
+    global DIFF_CHAIN
+    DIFF_CHAIN.add(var)
+    yield
+    DIFF_CHAIN.remove(var)
 
 
 def diff_writer(args):
-    # TODO: This could be optimized, chain rule is generally slower because of the
-    # extra fp multiplication. Use only when necessary (Requires hierachical change.)
-    # FIXME: The separation of the two functions greatly hurts maintainability.
     if len(args) == 1:
         expr = args[0]
         wrt = 't'
@@ -208,34 +238,29 @@ def diff_writer(args):
         expr, wrt = args
     if wrt != 't':
         raise NotImplementedError()
-    fnow = Rule.writeExpr(expr)
-    fvars, flambda = lambdify(expr)
-    # FIXME: round away from zero only, should be configurable
-    calling_args = ', '.join(f'take_step({manglers.write_var(i)}, {manglers.write_var(i)})' for i in fvars)
-    vnow = manglers.write_var(fvars.pop())
-    vprev = f'last_data_.get(comb_.get(0)).{vnow}'
-    return f'({flambda}({calling_args}) - {fnow}) * ({vnow} - {vprev}) / step'
-
-
-def make_cs_diff_writer(NVar):  # cs stands for conditional substitution
-    def _f(args):
-        if len(args) == 1:
-            expr = args[0]
-            wrt = 't'
-        else:
-            expr, wrt = args
-        if wrt != 't':
+    diffs = set(findDerivatives(expr))
+    chain = set()
+    for var in DIFF_CHAIN:
+        test = resolver.cNVar(var.name, var.order - 1)
+        if test in diffs:
+            chain.add((var, test))
+    if chain:
+        flambda = lambdify(expr, vars)
+        if len(chain) > 1:  # FIXME: Multi-dimensional chain rule broken
             raise NotImplementedError()
-        fvars, flambda = lambdify(expr)
-        var = fvars.pop()
-        vnow = manglers.write_var(var)
-        if var == NVar.name:
-            return f'math::calculus::fdiff({flambda}, {vnow}) * {manglers.fetch_mem(manglers.derivative(NVar))}'
-        else:
-            vprev = manglers.mem_prev(var, 2)
-            return f'math::calculus::fdiff({flambda}, {vnow}) * ({vnow} - {vprev}) / step'
-
-    return _f
+        vdiff, vnow = chain.pop()
+        return f'math::calculus::fdiff({flambda}, {Rule.proper_write_var(vnow)}) * {Rule.proper_write_var(vdiff)}'
+    else:
+        fnow = Rule.writeExpr(expr)
+        with ExitStack() as stack:
+            vars = set(listVars(expr))
+            for i in vars:
+                stack.enter_context(write_var_as(i, Rule.lambda_arg(i)))
+            flambda = lambdify(expr, vars)
+        fvars = [Rule.proper_write_var(i) for i in vars]
+        # FIXME: round away from zero only, should be configurable
+        args = ', '.join(f'take_step({i}, {i})' for i in fvars)
+        return f'({flambda}, {args} - {fnow}) / step'
 
 
 OP_TO_INST = {
@@ -245,18 +270,11 @@ OP_TO_INST = {
     '/': Op('math::op::div', 2),
     'pow': Op('std::pow', 2),
     'sin': Op('std::sin', 1),
-
+    'cos': Op('std::cos', 1),
+    'tan': Op('std::tan', 1),
     'sqrt': Op('math::sqrt', 1),
     'diff': Op('diff', 1, diff_writer),
 }
-
-
-@contextmanager
-def tmp_op_writer(name, writer):
-    old = OP_TO_INST[name].writer
-    OP_TO_INST[name].writer = writer
-    yield
-    OP_TO_INST[name].writer = old
 
 
 class SolvingStep:
@@ -277,22 +295,20 @@ class SolvingStep:
         elif self.type == 1:
             rule_id, solveFor = self.content
             name = solveFor.name
-            if solveFor.order == 0:  # an ultimate request
-                # TODO: This part is broken
-                with tmp_var_writer(lambda x: x if x == name else manglers.write_var(x)):
+            with write_var_as(name, manglers.fetch_mem(name)):
+                if solveFor.order == 0:  # an ultimate request
+                    # TODO: This part is broken
                     bind = manglers.mem_cur(name)
                     seed = manglers.mem_last(name)
                     return STEP_START + f'{bind} = math::solver::algebraic_single([&](double {name}){{\n' + \
                            pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
-            else:  # request from diff
-                derivative_name = manglers.fetch_mem(manglers.derivative(solveFor))
-                seed = 0
-                # chain rule must be considered if the unknown is a derivative.
-                # See make_cs_diff_writer for implementation
-                with tmp_var_writer(lambda x: manglers.fetch_mem(name) if x == name else manglers.write_var(x)):
-                    with tmp_op_writer('diff', make_cs_diff_writer(solveFor)):
-                        return f'[&](double t, double {manglers.fetch_mem(name)}){{' \
-                               + f'return math::solver::algebraic_single([&](double {derivative_name}){{\n' \
+                else:  # request from diff
+                    # chain rule must be considered if the unknown is a derivative.
+                    # See make_cs_diff_writer for implementation
+                    seed = 0
+                    with write_var_as(solveFor, Rule.lambda_arg(solveFor)), register_diff_chain_wrt(solveFor):
+                        return f'[&](double t, double {Rule.proper_write_var(name)}){{' \
+                               + f'return math::solver::algebraic_single([&](double {Rule.proper_write_var(solveFor)}){{\n' \
                                + pack[rule_id].write() + f'}}, {seed}); }}'
         else:
             base, var = self.content
@@ -319,7 +335,35 @@ class Rule:
     """Simple structure that stores a rule"""
     ITER = 1
 
-    VAR_WRITER = manglers.write_var
+    # TODO: Implement chained filters here.
+    VAR_WRITER = {}
+
+    @staticmethod
+    def proper_write_var(var):
+        override = Rule.VAR_WRITER.get(var)
+        if override:
+            return override
+        if isinstance(var, resolver.cNVar):
+            if var.order == 0:
+                return Rule.proper_write_var(var.name)
+            else:
+                return Rule.proper_write_var(manglers.cNVar(var))
+        try:
+            return manglers.mem_last(var)
+        except ValueError:
+            return var
+
+    @staticmethod
+    def lambda_arg(var):
+        if isinstance(var, resolver.cNVar):
+            if var.order == 0:
+                return Rule.lambda_arg(var.name)
+            else:
+                return Rule.lambda_arg(manglers.cNVar(var))
+        try:
+            return manglers.strip_mem(var)
+        except ValueError:
+            return var
 
     def __init__(self, content):
         self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
@@ -327,7 +371,7 @@ class Rule:
     @staticmethod
     def writeExpr(expression: tuple):
         if isinstance(expression, str):
-            return Rule.VAR_WRITER(expression)
+            return Rule.proper_write_var(expression)
         elif isinstance(expression, int):
             return str(expression)
         else:
@@ -436,22 +480,9 @@ class CondRule:
 class RuleResolvingStruct:
     """Structure that holds necessary information to resolve rules to steps."""
 
-    @staticmethod
-    def findDerivatives(expression, DIFF=0):
-        if isinstance(expression, tuple):
-            if expression[0] == 'diff':
-                DIFF += 1
-            for i in expression[1]:
-                yield from RuleResolvingStruct.findDerivatives(i, DIFF)
-            if expression[0] == 'diff':
-                DIFF -= 1
-        elif isinstance(expression, str):
-            yield resolver.cNVar(expression, DIFF)
-
     def __init__(self, idx, rule):
         self.idx = idx
         self.rule = rule
-        findDerivatives = RuleResolvingStruct.findDerivatives
         self.diffs = set(chain(findDerivatives(rule.content[0]),
                                findDerivatives(rule.content[1])))
 

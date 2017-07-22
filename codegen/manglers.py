@@ -9,6 +9,10 @@
 # avoid demangling a not-mangled name.
 ################################################################################
 
+# There are generally two way to handle member or watched variables, either thru
+# pure string identification and manipulations, or thru on-entry detection and
+# storing the information in an dedicated field. Currently we use the first.
+
 import re
 
 
@@ -16,8 +20,8 @@ def prev(s):
     return s + '_prev'
 
 
-def derivative(t):
-    return f'{t.name}_{t.order}'
+def cNVar(var):
+    return f'{var.name}_{var.order}'
 
 
 def fetch_mem(s):
@@ -64,10 +68,3 @@ def mem_cur(s):
 def mem_prev(s, steps):
     idx, attr = split_mem(s)
     return f'back_get(history, {steps}).get(comb_.get({idx})).{attr}'
-
-
-def write_var(expression):
-    try:
-        return mem_last(expression)
-    except ValueError:
-        return expression
