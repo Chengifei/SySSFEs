@@ -6,7 +6,6 @@
  */
 
 #include <utility>
-#include <iterator>
 #include <algorithm>
 #include "iter_utils.hpp"
 #include "set_support.hpp"
@@ -15,15 +14,14 @@
 
 struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     typedef std::vector<Rule> eqn_container;
-    typedef eqn_container::iterator iterator;
     typedef CSF_flat_set<NVar, NVar::Less> var_container;
     typedef CSF_flat_set<NVar, NVar::Less>::iterator var_iter;
     typedef combination<var_iter> comb_type;
-    powerset<iterator> eqn_choice;
+    powerset<eqn_container> eqn_choice;
     var_container vars;
     placeholder<comb_type> selection;
     eqn_try(eqn_container& pack)
-        : eqn_choice(pack.begin(), pack.end(), pack.size()) {
+        : eqn_choice(pack, pack.size()) {
         for (const auto& eqn : *eqn_choice)
             vars.insert(eqn.vars.begin(), eqn.vars.end());
         new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
@@ -32,6 +30,7 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
         ++*selection;
         if (selection->exhausted()) {
             vars.clear();
+            ++eqn_choice;
             for (const auto& eqn : *eqn_choice)
                 vars.insert(eqn.vars.begin(), eqn.vars.end());
             selection->~comb_type();
@@ -64,7 +63,7 @@ eqn_try<T> make_eqn_try(T b, T e, std::size_t sz) {
     return eqn_try<T>(b, e, sz);
 }
 #else
-#define make_powerset eqn_try
+#define make_eqn_try eqn_try
 #endif
 
 unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
@@ -98,7 +97,7 @@ consistent_fail:
                 return step_count;
             else {
                 have_remaining_unknowns = true;
-                break;
+                goto end;
             }
         }
         if (have_remaining_unknowns)
@@ -107,12 +106,13 @@ consistent_fail:
                 step_count += process(Starts);
             }
             catch (RulePackCannotBeResolved) {
-                pack = std::move(Pack);
-                order.remove(step_count);
-                inits = std::move(Inits);
-                continue;
+                goto end;
             }
         return step_count;
+end:
+        pack = std::move(Pack);
+        order.remove(step_count);
+        inits = std::move(Inits);
     }
     throw RulePackCannotBeResolved();
 }

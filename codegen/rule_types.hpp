@@ -23,7 +23,9 @@ enum class EqnSolver {
 struct NVar {
     typedef std::string variable_type;
     variable_type name;
-    std::size_t order;
+    std::size_t order; // TODO: Use unsigned char [8] here
+    // to both avoid waste of space and support partial derivatives.
+    // This field shall be std::vector<std::size_t>, but that'll be used so rarely.
     NVar() {}
     NVar(std::string name, std::size_t order)
         : name(name), order(order) {}
@@ -113,9 +115,9 @@ public:
         : pack(std::move(pack)), order(order), inits(std::move(inits)) {}
     unsigned process(const CSF_set<NVar>& start_nodes = {});
 private:
-    // The function may fail, and returns empty optionals on fail.
+    /// The function may fail, and returns empty optionals on fail.
     std::optional<unsigned> alg_consistent();
-    // The function may fail, and returns false on fail.
+    /// The function may fail, and returns false on fail.
     bool broadcast(const NVar&, const CSF_set<NVar>& except = {});
     bool validate_resolution() const noexcept;
 };

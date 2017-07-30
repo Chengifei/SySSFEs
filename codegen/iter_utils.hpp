@@ -111,13 +111,13 @@ struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
 template <class T>
 struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
     typedef typename T::value_type value_type;
-    const iter_utils::random_iterator_view<T> pool;
+    const T& pool;
     std::vector<value_type> result;
     int idx = 0;
     const std::size_t sz;
     std::unique_ptr<std::size_t[]> indices;
-    powerset(T begin, T end, std::size_t sz)
-        : pool{begin, end}, sz(sz), indices(std::make_unique<std::size_t[]>(sz)) {
+    powerset(const T& pool, std::size_t sz)
+        : pool(pool), sz(sz), indices(std::make_unique<std::size_t[]>(sz)) {
         indices[0] = 0;
         result.reserve(sz);
         result.resize(1);
