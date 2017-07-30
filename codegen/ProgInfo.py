@@ -26,24 +26,70 @@ def removeDup(seq):
     return list(odict.fromkeys(seq).keys())
 
 
-def listVars(expr):
-    if isinstance(expr, tuple):
-        for i in expr[1]:
-            yield from listVars(i)
-    elif isinstance(expr, str):
-        yield expr
+class Expr:
+    VAR_WRITER = {}
 
+    def __init__(self, expr):
+        if isinstance(expr, tuple):
+            self.content = (expr[0], [Expr(i) for i in expr[1]])
+        else:
+            self.content = expr
 
-def findDerivatives(expression, DIFF=0):
-    if isinstance(expression, tuple):
-        if expression[0] == 'diff':
-            DIFF += 1
-        for i in expression[1]:
-            yield from findDerivatives(i, DIFF)
-        if expression[0] == 'diff':
-            DIFF -= 1
-    elif isinstance(expression, str):
-        yield resolver.cNVar(expression, DIFF)
+    def listVars(self):
+        if isinstance(self.content, tuple):
+            for i in self.content[1]:
+                yield from i.listVars()
+        elif isinstance(self.content, str):
+            yield self.content
+
+    def findDerivatives(self, DIFF=0):
+        if isinstance(self.content, tuple):
+            if self.content[0] == 'diff':
+                DIFF += 1
+            for i in self.content[1]:
+                yield from i.findDerivatives(DIFF)
+            if self.content[0] == 'diff':
+                DIFF -= 1
+        elif isinstance(self.content, str):
+            yield resolver.cNVar(self.content, DIFF)
+
+    @staticmethod
+    def proper_write_var(var):
+        override = Expr.VAR_WRITER.get(var)
+        if override:
+            return override
+        if isinstance(var, resolver.cNVar):
+            if var.order == 0:
+                return Expr.proper_write_var(var.name)
+            else:
+                return Expr.proper_write_var(manglers.cNVar(var))
+        try:
+            return manglers.mem_last(var)
+        except ValueError:
+            return var
+
+    @staticmethod
+    def lambda_arg(var):
+        if isinstance(var, resolver.cNVar):
+            if var.order == 0:
+                return Expr.lambda_arg(var.name)
+            else:
+                return Expr.lambda_arg(manglers.cNVar(var))
+        try:
+            return manglers.strip_mem(var)
+        except ValueError:
+            return var
+
+    def write(self):
+        if isinstance(self.content, str):
+            return Expr.proper_write_var(self.content)
+        elif isinstance(self.content, int):
+            return str(self.content)
+        else:
+            return OP_TO_INST[self.content[0]].write(self.content[1])
+
+    def __repr__(self):
+        return repr(self.content)
 
 
 class Space:
@@ -193,7 +239,7 @@ class Op:
         if self.writer:
             return self.writer(args)
         else:
-            return '{}({})'.format(self.name, ', '.join(Rule.writeExpr(arg) for arg in args))
+            return '{}({})'.format(self.name, ', '.join(Expr.write(arg) for arg in args))
 
     def __repr__(self):
         return 'Op:' + self.name
@@ -201,13 +247,13 @@ class Op:
 
 @contextmanager
 def write_var_as(on, replace):
-    old = Rule.VAR_WRITER.get(on)
-    Rule.VAR_WRITER[on] = replace
+    old = Expr.VAR_WRITER.get(on)
+    Expr.VAR_WRITER[on] = replace
     yield
     if old:
-        Rule.VAR_WRITER[on] = old
+        Expr.VAR_WRITER[on] = old
     else:
-        del Rule.VAR_WRITER[on]
+        del Expr.VAR_WRITER[on]
 
 
 def lambdify(expr, vars):
@@ -215,8 +261,8 @@ def lambdify(expr, vars):
     Convert an expression into lambda. Caller shall ensure all arguments of the lambda shall be
     compatible with target naming restrictions. All arguments are written through proper_write_var.
     """
-    lambda_args = ', '.join('double ' + Rule.proper_write_var(i) for i in vars)
-    return f'[]({lambda_args}){{ return {Rule.writeExpr(expr)}; }}'
+    lambda_args = ', '.join('double ' + Expr.proper_write_var(i) for i in vars)
+    return f'[]({lambda_args}){{ return {Expr.write(expr)}; }}'
 
 
 DIFF_CHAIN = set()
@@ -238,26 +284,27 @@ def diff_writer(args):
         expr, wrt = args
     if wrt != 't':
         raise NotImplementedError()
-    diffs = set(findDerivatives(expr))
+    diffs = set(expr.findDerivatives())
     chain = set()
     for var in DIFF_CHAIN:
         test = resolver.cNVar(var.name, var.order - 1)
         if test in diffs:
             chain.add((var, test))
     if chain:
-        flambda = lambdify(expr, vars)
+        flambda = lambdify(expr, {i[0].name for i in chain})
         if len(chain) > 1:  # FIXME: Multi-dimensional chain rule broken
             raise NotImplementedError()
         vdiff, vnow = chain.pop()
-        return f'math::calculus::fdiff({flambda}, {Rule.proper_write_var(vnow)}) * {Rule.proper_write_var(vdiff)}'
+        return f'math::calculus::fdiff({flambda}, {Expr.proper_write_var(vnow)}) * {Expr.proper_write_var(vdiff)}'
     else:
-        fnow = Rule.writeExpr(expr)
+        fnow = Expr.write(expr)
         with ExitStack() as stack:
-            vars = set(listVars(expr))
+            # FIXME: This is still broken if expression involves variable and its derivative
+            vars = set(expr.listVars())
             for i in vars:
-                stack.enter_context(write_var_as(i, Rule.lambda_arg(i)))
+                stack.enter_context(write_var_as(i, Expr.lambda_arg(i)))
             flambda = lambdify(expr, vars)
-        fvars = [Rule.proper_write_var(i) for i in vars]
+        fvars = [Expr.proper_write_var(i) for i in vars]
         # FIXME: round away from zero only, should be configurable
         args = ', '.join(f'take_step({i}, {i})' for i in fvars)
         return f'({flambda}, {args} - {fnow}) / step'
@@ -306,9 +353,9 @@ class SolvingStep:
                     # chain rule must be considered if the unknown is a derivative.
                     # See make_cs_diff_writer for implementation
                     seed = 0
-                    with write_var_as(solveFor, Rule.lambda_arg(solveFor)), register_diff_chain_wrt(solveFor):
-                        return f'[&](double t, double {Rule.proper_write_var(name)}){{' \
-                               + f'return math::solver::algebraic_single([&](double {Rule.proper_write_var(solveFor)}){{\n' \
+                    with write_var_as(solveFor, Expr.lambda_arg(solveFor)), register_diff_chain_wrt(solveFor):
+                        return f'[&](double t, double {Expr.proper_write_var(name)}){{' \
+                               + f'return math::solver::algebraic_single([&](double {Expr.proper_write_var(solveFor)}){{\n' \
                                + pack[rule_id].write() + f'}}, {seed}); }}'
         else:
             base, var = self.content
@@ -333,56 +380,15 @@ class SolvingStep:
 
 class Rule:
     """Simple structure that stores a rule"""
-    ITER = 1
-
-    # TODO: Implement chained filters here.
-    VAR_WRITER = {}
-
-    @staticmethod
-    def proper_write_var(var):
-        override = Rule.VAR_WRITER.get(var)
-        if override:
-            return override
-        if isinstance(var, resolver.cNVar):
-            if var.order == 0:
-                return Rule.proper_write_var(var.name)
-            else:
-                return Rule.proper_write_var(manglers.cNVar(var))
-        try:
-            return manglers.mem_last(var)
-        except ValueError:
-            return var
-
-    @staticmethod
-    def lambda_arg(var):
-        if isinstance(var, resolver.cNVar):
-            if var.order == 0:
-                return Rule.lambda_arg(var.name)
-            else:
-                return Rule.lambda_arg(manglers.cNVar(var))
-        try:
-            return manglers.strip_mem(var)
-        except ValueError:
-            return var
 
     def __init__(self, content):
-        self.content = expr.stringToExpr(content[0]), expr.stringToExpr(content[1])
-
-    @staticmethod
-    def writeExpr(expression: tuple):
-        if isinstance(expression, str):
-            return Rule.proper_write_var(expression)
-        elif isinstance(expression, int):
-            return str(expression)
-        else:
-            return OP_TO_INST[expression[0]].write(expression[1])
+        self.lhs, self.rhs = Expr(expr.stringToExpr(content[0])), Expr(expr.stringToExpr(content[1]))
 
     def write(self):
-        return 'return math::op::sub(' + self.writeExpr(self.content[0]) + ',\n' + self.writeExpr(
-            self.content[1]) + ');\n'
+        return 'return math::op::sub(' + self.lhs.write() + ',\n' + self.rhs.write() + ');\n'
 
     def __repr__(self):
-        return f'Rule {self.content[0]} = {self.content[1]}'
+        return f'Rule {self.lhs} = {self.rhs}'
 
 
 class RulePack:
@@ -432,8 +438,8 @@ class CondRule:
             else:
                 comp = next(x for x in CondRule.COMP if x in i)
                 lhs, rhs = i.split(comp)
-                yield from Rule.writeExpr(expr.stringToExpr(lhs))
-                yield from Rule.writeExpr(expr.stringToExpr(rhs))
+                yield from Expr.write(expr.stringToExpr(lhs))
+                yield from Expr.write(expr.stringToExpr(rhs))
 
     @staticmethod
     def _infixCondToPrefix(condition):
@@ -483,12 +489,7 @@ class RuleResolvingStruct:
     def __init__(self, idx, rule):
         self.idx = idx
         self.rule = rule
-        self.diffs = set(chain(findDerivatives(rule.content[0]),
-                               findDerivatives(rule.content[1])))
-
-    @property
-    def vars(self):
-        return set(chain(listVars(self.rule.content[0]), listVars(self.rule.content[1])))
+        self.diffs = set(chain(rule.lhs.findDerivatives(), rule.rhs.findDerivatives()))
 
     def __repr__(self):
         return repr(self.rule)
