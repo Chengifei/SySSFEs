@@ -6,7 +6,7 @@ std::size_t hash_value(const NVar& self) {
         hash ^= i;
         hash *= 1099511628211U;
     }
-    return hash & ~0b111 | self.order;
+    return (hash & ~0b111) | *reinterpret_cast<const std::uint64_t*>(self.order.data());
 }
 
 void ResolvingOrder::add_alg(std::size_t r, NVar v) {

@@ -1,14 +1,10 @@
 #ifndef SET_SUPPORT_HPP
 #define SET_SUPPORT_HPP
 #include <unordered_set>
-#include <boost/container/flat_set.hpp>
 #include <boost/functional/hash.hpp>
 
 template <typename T, class hash = boost::hash<T>>
 using CSF_set = std::unordered_set<T, hash>;
-
-template <typename T, class... U>
-using CSF_flat_set = boost::container::flat_set<T, U...>;
 
 template <class C1, class C2>
 bool is_subset(const C1& S1, const C2& S2) {
@@ -17,12 +13,6 @@ bool is_subset(const C1& S1, const C2& S2) {
             return false;
     }
     return true;
-}
-
-template <class C1, class C2>
-void update(C1& S1, const C2& S2) {
-    for (auto& i: S2)
-        S1.insert(i);
 }
 
 template <class C1, class C2>
@@ -56,5 +46,10 @@ bool verify_then_remove(C& set, const T& key) {
         return true;
     }
     return false;
+}
+
+template <class C, class T>
+bool verify_then_insert(C& set, T key) {
+    return set.insert(std::move(key)).second;
 }
 #endif

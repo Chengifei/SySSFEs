@@ -10,9 +10,9 @@
 #include <string>
 #include <cstdint>
 #include <vector>
+#include <array>
 #include <optional>
 #include "set_support.hpp"
-#include <unordered_map>
 
 enum class EqnSolver {
     ALG_S,
@@ -23,12 +23,11 @@ enum class EqnSolver {
 struct NVar {
     typedef std::string variable_type;
     variable_type name;
-    std::size_t order; // TODO: Use unsigned char [8] here
-    // to both avoid waste of space and support partial derivatives.
+    std::array<std::uint8_t, 8> order;
     // This field shall be std::vector<std::size_t>, but that'll be used so rarely.
     NVar() {}
-    NVar(std::string name, std::size_t order)
-        : name(name), order(order) {}
+    NVar(std::string name, std::uint8_t order)
+        : name(name), order{order} {}
     bool operator==(const NVar& rhs) const {
         return name == rhs.name && order == rhs.order;
     }
@@ -49,7 +48,7 @@ struct Rule {
     CSF_set<NVar> unknowns;
     Rule(){}
     Rule(std::size_t id, CSF_set<NVar> vars)
-        : unique_id(id), vars(vars), unknowns(vars) {}
+        : unique_id(id), vars(std::move(vars)), unknowns(this->vars) {}
 };
 
 struct ResolvingOrder {
@@ -63,6 +62,8 @@ struct ResolvingOrder {
     template <EqnSolver type> class step;
     std::vector<std::unique_ptr<step_base>> seq;
     ResolvingOrder() {}
+    ResolvingOrder(ResolvingOrder&&) = default;
+    ResolvingOrder& operator=(ResolvingOrder&&) = default;
     void add_alg(std::size_t, NVar);
     void add_alg_sys(std::vector<std::size_t>, std::vector<NVar>);
     void remove(std::size_t idx) noexcept {
@@ -103,22 +104,22 @@ public:
     }
 };
 
-class RulePackCannotBeResolved {};
-
 struct RuleResolver {
 private:
     std::vector<Rule> pack;
-    ResolvingOrder& order;
-    CSF_flat_set<NVar, NVar::Less> inits;
+    const CSF_set<NVar>& knowns;
+    CSF_set<NVar> cycle;
+    ResolvingOrder order;
 public:
-    RuleResolver(std::vector<Rule> pack, ResolvingOrder& order, CSF_flat_set<NVar, NVar::Less> inits)
-        : pack(std::move(pack)), order(order), inits(std::move(inits)) {}
-    unsigned process(const CSF_set<NVar>& start_nodes = {});
+    RuleResolver(std::vector<Rule> pack, const CSF_set<NVar>& knowns)
+        : pack(std::move(pack)), knowns(knowns) {}
+    ResolvingOrder get();
+    bool process();
 private:
     /// The function may fail, and returns empty optionals on fail.
     std::optional<unsigned> alg_consistent();
     /// The function may fail, and returns false on fail.
-    bool broadcast(const NVar&, const CSF_set<NVar>& except = {});
-    bool validate_resolution() const noexcept;
+    bool broadcast(const NVar&, bool enable_cycle = false);
+    bool validate_resolution(const std::vector<NVar>&) const noexcept;
 };
 #endif

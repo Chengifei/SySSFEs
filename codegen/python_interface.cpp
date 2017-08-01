@@ -52,11 +52,11 @@ PyObject* tuplize_order(const ResolvingOrder& order) {
 
 PyObject* resolve(PyObject*, PyObject* args) {
     std::vector<Rule> Pack;
-    CSF_flat_set<NVar, NVar::Less> requests;
+    CSF_set<NVar> knowns;
     try {
         PyObject* pack;
-        PyObject* solve_for;
-        PyOnly(PyArg_ParseTuple(args, "OO", &pack, &solve_for), true);
+        PyObject* known;
+        PyOnly(PyArg_ParseTuple(args, "OO", &pack, &known), true);
         std::size_t sz = PyExc(PySequence_Size(pack), -1);
         Pack.reserve(sz);
         for (std::size_t i = 0; i != sz; ++i) {
@@ -72,25 +72,20 @@ PyObject* resolve(PyObject*, PyObject* args) {
             auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
             Pack.emplace_back(PyLong_AsLong(idx), std::move(vars));
         }
-        PyScoped iter(PyExc(PyObject_GetIter(solve_for), nullptr));
+        PyScoped iter(PyExc(PyObject_GetIter(known), nullptr));
         PyScoped item(PyIter_Next(iter));
         for (; item; item = PyScoped(PyIter_Next(iter))) {
-            const cNVar* i = static_cast<cNVar*>(item.get());
-            requests.insert(i->var);
+            knowns.insert(NVar(PyUnicode_AsUTF8(item.get()), 0));
         }
     }
     catch (Python_API_Exception) {
         PyErr_SetString(PyExc_RuntimeError, "Error converting python objects to C++ equivalent");
         return nullptr;
     }
-    ResolvingOrder order;
-    RuleResolver Resolver(std::move(Pack), order, requests);
-    try {
-        Resolver.process({});
-    }
-    catch (RulePackCannotBeResolved) {
+    RuleResolver Resolver(std::move(Pack), knowns);
+    if (!Resolver.process()) {
         PyErr_SetString(PyExc_ValueError, "Rule pack cannot be resolved");
         return nullptr;
     }
-    return tuplize_order(order);
+    return tuplize_order(Resolver.get());
 }

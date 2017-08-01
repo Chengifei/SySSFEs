@@ -120,8 +120,6 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
         : pool(pool), sz(sz), indices(std::make_unique<std::size_t[]>(sz)) {
         indices[0] = 0;
         result.reserve(sz);
-        result.resize(1);
-        result[idx] = pool[indices[idx]];
     }
     powerset& operator++() {
         if (indices[idx] + (result.size() - idx) != sz) {
@@ -146,7 +144,7 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
         return *this;
     }
   	bool exhausted() {
-      	return result.empty();
+      	return result.size() == idx + 1;
     }
   	std::vector<value_type>& operator*() {
       	return result;
@@ -168,7 +166,7 @@ private:
             }
         }
         else {
-            result.clear();
+            result.resize(idx + 1);
         }
     }
 };

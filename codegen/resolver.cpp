@@ -8,14 +8,13 @@
 #include <utility>
 #include <algorithm>
 #include "iter_utils.hpp"
-#include "set_support.hpp"
 #include "rule_types.hpp"
 #include "../common/typed_buffer.hpp"
 
 struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     typedef std::vector<Rule> eqn_container;
-    typedef CSF_flat_set<NVar, NVar::Less> var_container;
-    typedef CSF_flat_set<NVar, NVar::Less>::iterator var_iter;
+    typedef std::vector<NVar> var_container;
+    typedef var_container::iterator var_iter;
     typedef combination<var_iter> comb_type;
     powerset<eqn_container> eqn_choice;
     var_container vars;
@@ -23,7 +22,7 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     eqn_try(eqn_container& pack)
         : eqn_choice(pack, pack.size()) {
         for (const auto& eqn : *eqn_choice)
-            vars.insert(eqn.vars.begin(), eqn.vars.end());
+            std::copy(eqn.vars.begin(), eqn.vars.end(), std::back_inserter(vars));
         new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
     }
     eqn_try& operator++() {
@@ -32,7 +31,7 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
             vars.clear();
             ++eqn_choice;
             for (const auto& eqn : *eqn_choice)
-                vars.insert(eqn.vars.begin(), eqn.vars.end());
+                std::copy(eqn.vars.begin(), eqn.vars.end(), std::back_inserter(vars));
             selection->~comb_type();
             new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
         }
@@ -48,9 +47,14 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     bool exhausted() {
         return eqn_choice.exhausted();
     }
+    ~eqn_try() {
+        selection->~comb_type();
+    }
 };
 
-bool RuleResolver::validate_resolution() const noexcept {
+bool RuleResolver::validate_resolution(const std::vector<NVar>& need_update) const noexcept {
+    if (!is_subset(need_update, cycle))
+        return false;
     for (const Rule& eqn : pack)
         if (!eqn.unknowns.empty())
             return false;
@@ -66,64 +70,53 @@ eqn_try<T> make_eqn_try(T b, T e, std::size_t sz) {
 #define make_eqn_try eqn_try
 #endif
 
-unsigned RuleResolver::process(const CSF_set<NVar>& starts) {
+ResolvingOrder RuleResolver::get() {
+    return std::move(order);
+}
+
+bool RuleResolver::process() {
     // TODO: Independent starts selection shall be deterministic, then we can
     // even eliminate optionals.
-    for (auto attempt : eqn_try(pack)) {
-        auto occurrences = attempt.first;
-        const auto& new_starts = *attempt.second;
+    for (auto attempt : make_eqn_try(pack)) {
         unsigned step_count = 0;
-        if (new_starts.size() == 1)
-            order.add_alg(occurrences[0], *inits.begin());
-        else
-            order.add_alg_sys(occurrences, new_starts);
-        step_count += 1;
+        const auto& starts = *attempt.second;
+        {
+        auto& occurrences = attempt.first;
+        if (starts.size() == 1)
+            order.add_alg(occurrences[0], *starts.begin());
+        else if (starts.size() > 1)
+            order.add_alg_sys(std::move(occurrences), starts);
+        ++step_count;
+        }
         auto Pack = pack;
-        auto Starts = union_sets(starts, new_starts);
-        auto Inits = inits;
         // to keep consistency of the system:
         // 1. the derivatives of the same variable must all be updated. (broadcast)
         // 2. the last variable in an algebraic equation must be computed
         //    once all the other variables are known.
-        bool have_remaining_unknowns = false;
-        for (const auto& var : Starts) {
-            if (!broadcast(var, Starts))
-                goto consistent_fail;
-            if (std::optional<unsigned> a_s = alg_consistent())
-                step_count += *a_s;
-            else goto consistent_fail;
-consistent_fail:
-            if (validate_resolution())
-                return step_count;
-            else {
-                have_remaining_unknowns = true;
-                goto end;
-            }
+        for (const auto& var : starts)
+            if (!broadcast(var))
+                goto fail;
+        if (std::optional<unsigned> a_s = alg_consistent())
+            step_count += *a_s;
+fail:
+        if (validate_resolution(starts))
+            return true;
+        else {
+            pack = std::move(Pack);
+            order.remove(step_count);
         }
-        if (have_remaining_unknowns)
-            try {
-                exclude(inits, new_starts);
-                step_count += process(Starts);
-            }
-            catch (RulePackCannotBeResolved) {
-                goto end;
-            }
-        return step_count;
-end:
-        pack = std::move(Pack);
-        order.remove(step_count);
-        inits = std::move(Inits);
     }
-    throw RulePackCannotBeResolved();
+    return false;
 }
 
-bool RuleResolver::broadcast(const NVar& exact, const CSF_set<NVar>& except) {
-    bool all_succeeded = true;
+bool RuleResolver::broadcast(const NVar& exact, bool enable_cycle) {
+    bool all_succeeded = true; // do as much as possible, don't fast fail.
     for (Rule& eqn : pack)
         for (const NVar& var : eqn.vars)
-            if (var.name == exact.name && except.count(var) == 0)
-                if (!verify_then_remove(eqn.unknowns, var)) // CAUTION: SIDE EFFECT
-                    all_succeeded = false; // do as much as possible, don't fast fail.
+            if (var.name == exact.name)
+                if (!verify_then_remove(eqn.unknowns, var)
+                    && (enable_cycle ? !verify_then_insert(cycle, var) : false))
+                    all_succeeded = false;
     return all_succeeded;
 }
 
@@ -145,7 +138,7 @@ std::optional<unsigned> RuleResolver::alg_consistent() {
         order.add_alg(eqn.unique_id, to_update);
         step_count += 1;
         // recurse for the further variables
-        if (!broadcast(to_update)) {
+        if (!broadcast(to_update, true)) {
             order.remove(step_count);
             return std::optional<unsigned>();
         }

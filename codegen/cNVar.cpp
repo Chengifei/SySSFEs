@@ -11,8 +11,12 @@ PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
 PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "name") == 0)
         return PyUnicode_FromString(static_cast<cNVar*>(self)->var.name.c_str());
-    else if (strcmp(attr_name, "order") == 0)
-        return PyLong_FromLong(static_cast<cNVar*>(self)->var.order);
+    else if (strcmp(attr_name, "order") == 0) {
+        PyObject* L = PyList_New(8);
+        for (std::size_t i = 0; i != 8; ++i)
+            PyList_SET_ITEM(L, 0, PyLong_FromLong(static_cast<cNVar*>(self)->var.order[i]));
+        return L;
+    }
     PyErr_Format(PyExc_AttributeError,
                  "cNVar object has no attribute '%.400s'", attr_name);
     return nullptr;
@@ -20,7 +24,7 @@ PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
 
 PyObject* cNVar_repr(PyObject* self) {
     cNVar& var = *static_cast<cNVar*>(self);
-    return PyUnicode_FromFormat("%s(%i)", var.var.name.c_str(), var.var.order);
+    return PyUnicode_FromFormat("%s(%zu)", var.var.name.c_str(), var.var.order);
 }
 
 Py_hash_t cNVar_hash(PyObject* self) {
@@ -30,8 +34,8 @@ Py_hash_t cNVar_hash(PyObject* self) {
 
 int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
     const char* name;
-    std::size_t order;
-    if (!PyArg_ParseTuple(args, "sn", &name, &order))
+    unsigned order;
+    if (!PyArg_ParseTuple(args, "sI", &name, &order))
         return -1;
     new(&(static_cast<cNVar*>(self)->var)) NVar(name, order);
     return 0;
