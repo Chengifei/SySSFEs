@@ -11,7 +11,7 @@
 namespace math::solver {
 
 template <class F>
-double algebraic_single(const F& expr, double x) {
+double algebraic(const F& expr, double x) {
     double diff = expr(x);
     double tol = (fabs(diff) > 1) ? 0x1p-27 * fabs(diff) :
                                     0x1p-27;

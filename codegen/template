@@ -50,6 +50,7 @@ int main() {
     });
     std::ofstream output("out.atom");
     [[>>>]]
+    [[>>>]]
     double time_ = 0;
     history.push_back(std::make_pair(time_, std::move(srd_)));
     srd_ = std::make_unique<shared_>();
@@ -58,14 +59,14 @@ int main() {
         // we must do this at beginning instead of ending, to ensure consistency
         shared_& last_data_ = *history.back().second;
         history.push_back(std::make_pair(time_, std::make_unique<shared_>()));
-        shared_* srd_ = history.back().second.get();
+        shared_& srd_ = *history.back().second;
 
         comb_.reset();
         do {
             [[>>>]]
         } while (++comb_);
 
-        output << time_ << ": " << *srd_ << "\n";
+        output << time_ << ": " << srd_ << "\n";
 
         time_ += step;
     }

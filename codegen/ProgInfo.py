@@ -10,25 +10,119 @@
 # DO NOT RUN COMPILER IN PARALLEL IN CURRENT RELEASE
 # THE FILE CONTAINS BAD USAGE PATTERN OF GLOBAL VARIABLE USED FOR TESTING.
 ################################################################################
-import sys, os.path
-from contextlib import contextmanager, ExitStack
-from . import resolver
-from . import manglers
+from collections import OrderedDict as odict
+from . import warning
 from . import templating
-
+from . import resolver
+from .support import cSrcLocation as src_tracker, cTypes, cVariable as Var
+from itertools import chain
+from contextlib import contextmanager
+import sys, os
 sys.path.insert(0, os.path.abspath('..'))
 from parser import expr
-from collections import OrderedDict as odict
-from itertools import chain, islice
 
 
-def removeDup(seq):
-    return list(odict.fromkeys(seq).keys())
+class Flag:
+    def __init__(self, val):
+        self.flag = val
+
+    def __bool__(self):
+        return self.flag
+
+
+class RuleType:
+    def __init__(self, src, dom, rule):
+        self.src = src
+        self.domain = dom
+        self.rule = Expr(expr.stringToExpr(rule[0])), Expr(
+            expr.stringToExpr(rule[1]))
+        self.diffs = set(
+            chain(self.rule[0].findDerivatives(),
+                  self.rule[1].findDerivatives()))
+
+    def list_vars(self):
+        return chain(self.rules[0].listVars(), self.rules[1].listVars())
+
+    def __repr__(self):
+        return f'Rule at {self.src}: {self.rule}'
+
+
+class ObjType:
+    def __init__(self, src, obj, vals):
+        self.src = src
+        self.name = obj
+        self.vals = vals
+
+    def getWatch(self, watch):
+        return writers.WatchWriter(watch)
+
+    def writer(self):
+        return self
+
+    def write(self):
+        return f'object {self.name} {self.vals};'
+
+    def __repr__(self):
+        return f'Object at {self.src}: {self.vals}'
+
+
+class DeclType:
+    def __init__(self, src, types):
+        self.src = src
+        self.types = types
+
+
+class Op:
+    def __init__(self, name, argc=1, writer=None):
+        self.name = name
+        self.argc = argc
+        self.writer = writer
+
+    def __repr__(self):
+        return 'Op:' + self.name
+
+
+def diff_writer(args, default_writer: 'StepWriter'):
+    expr, *wrt = args
+    if wrt:
+        raise NotImplementedError
+    all_vars = set(resolver.cNVar(i.name, i.order[0]+1) for i in expr.findDerivatives())
+    solving = {var for var in default_writer.state[-1] if var in all_vars}
+    if not solving:
+        return f'math::calculus::fdiff({default_writer.write_lambda("&", "double t", "return " + default_writer.write_expr(expr) + ";")}, t)'
+    else:
+        override_dict = {}
+        var = solving.pop()
+        write = default_writer.write_arg(var)
+        override_dict[var] = write
+        # When using chain-rule we have to adjust writing scheme for base
+        # variables as well
+        var_base = resolver.cNVar(var.name, var.order[0] - 1)
+        write_base = default_writer.write_arg(var_base)
+        if var.order[0] > 1:
+            override_dict[var_base] = write_base
+        else:
+            override_dict[var.name] = write_base
+        original_write = default_writer.VarWriter.write(var_base)
+        with default_writer.VarWriter.tmp_override(override_dict):
+            text = f'math::calculus::fdiff({default_writer.write_lambda("&", f"double {write_base}", "return " + default_writer.write_expr(expr) + ";")}, {original_write})'
+        return text + f' * {write}'
+
+OP = {
+    '+': Op('math::op::add', 2),
+    '-': Op('math::op::sub', 2),
+    '*': Op('math::op::mul', 2),
+    '/': Op('math::op::div', 2),
+    'pow': Op('std::pow', 2),
+    'sin': Op('std::sin', 1),
+    'cos': Op('std::cos', 1),
+    'tan': Op('std::tan', 1),
+    'sqrt': Op('math::sqrt', 1),
+    'diff': Op('diff', 1, diff_writer),
+}
 
 
 class Expr:
-    VAR_WRITER = {}
-
     def __init__(self, expr):
         if isinstance(expr, tuple):
             self.content = (expr[0], [Expr(i) for i in expr[1]])
@@ -53,443 +147,225 @@ class Expr:
         elif isinstance(self.content, str):
             yield resolver.cNVar(self.content, DIFF)
 
-    @staticmethod
-    def proper_write_var(var):
-        override = Expr.VAR_WRITER.get(var)
-        if override:
-            return override
-        if isinstance(var, resolver.cNVar):
-            if var.order == 0:
-                return Expr.proper_write_var(var.name)
-            else:
-                return Expr.proper_write_var(manglers.cNVar(var))
-        try:
-            return manglers.mem_last(var)
-        except ValueError:
-            return var
-
-    @staticmethod
-    def lambda_arg(var):
-        if isinstance(var, resolver.cNVar):
-            if var.order == 0:
-                return Expr.lambda_arg(var.name)
-            else:
-                return Expr.lambda_arg(manglers.cNVar(var))
-        try:
-            return manglers.strip_mem(var)
-        except ValueError:
-            return var
-
-    def write(self):
-        if isinstance(self.content, str):
-            return Expr.proper_write_var(self.content)
-        elif isinstance(self.content, int):
-            return str(self.content)
-        else:
-            return OP_TO_INST[self.content[0]].write(self.content[1])
-
     def __repr__(self):
         return repr(self.content)
 
 
+def resolve(offset, rules, unknowns):
+    for i in rules:
+        i.diffs.intersection_update(unknowns)
+    steps = resolver.resolve(rules, unknowns)
+    return [(offset + i, j) for i, j in steps]
+
+
+class StepWriter:
+    def __init__(self, space: 'Space'):
+        self.space = space
+        self.state = []
+        self.VarWriter = StepWriter.VarWriter(self.space.locate_var)
+        self.noBind = Flag(False)
+
+    @staticmethod
+    @contextmanager
+    def tmp_flag(flag, a):
+        old = flag.flag
+        flag.flag = a
+        yield
+        flag.flag = old
+
+    def write(self, step):
+        use, update = step
+        if self.noBind:
+            bind = ''
+            end = ''
+        else:
+            bind = f'{self.VarWriter.write(update)} = '
+            end = ';'
+        if isinstance(use, int):
+            return bind + self.write_alg(
+                self.write_lambda('&',
+                                  f'double {self.write_arg(update)}',
+                                  f'return {self.write_rule(self.space.rules[use])};'),
+                self.write_expr(update)) + end
+        elif isinstance(use, tuple):
+            update_intermediate = use[1]
+            self.state.append([update_intermediate])
+            with self.tmp_flag(self.noBind, True), self.tmp_flag(self.VarWriter.UnrecordedAsConst, True):
+                return bind + self.write_diff(
+                    self.write_lambda('&', 'double t, double x', f'return {self.write(use)};'),
+                    't', self.write_expr(update),
+                    'step') + '.first' + end
+
+    @staticmethod
+    def write_alg(rule, seed):
+        return f'math::solver::algebraic({rule}, {seed})'
+
+    @staticmethod
+    def write_diff(gen, wrt, seed, step):
+        return f'math::solver::differential({gen}, {wrt}, {seed}, {step})'
+
+    def write_rule(self, rule: RuleType):
+        return f'math::op::sub({self.write_expr(rule.rule[0])}, {self.write_expr(rule.rule[1])})'
+
+    def write_expr(self, expr):
+        if isinstance(expr, Expr):
+            expr = expr.content
+        if isinstance(expr, tuple):
+            op = OP[expr[0]]
+            if op.writer:
+                return op.writer(expr[1], self)
+            else:
+                return f'{op.name}({", ".join(self.write_expr(i) for i in expr[1])})'
+        elif isinstance(expr, str) or isinstance(expr, resolver.cNVar):
+            return self.VarWriter.write(expr)
+        else:
+            return str(expr)
+
+    class VarWriter:
+        def __init__(self, parent):
+            # controls writing of unrecorded variable
+            # i.e. the variables computed on demand
+            self.look_up = parent
+            self.UnrecordedAsConst = Flag(False)
+            self.override = {}
+
+        @contextmanager
+        def tmp_override(self, iter):
+            old = self.override.copy()
+            self.override.update(iter)
+            yield
+            self.override = old
+
+        def write(self, var):
+            if var in self.override:
+                return self.override[var]
+            elif isinstance(var, resolver.cNVar):
+                if sum(var.order) != 0:
+                    if not self.UnrecordedAsConst:
+                        return f'{self.write(var.name)}_{var.order[0]}'
+                    else:
+                        return '0'
+                else:
+                    return self.write(var.name)
+            else:
+                lookup_result = self.look_up(var)
+                if isinstance(lookup_result, tuple):
+                    return self.write_watch(lookup_result[0], lookup_result[1])
+                else:
+                    return var
+
+        @staticmethod
+        def write_watch(num, var):
+            return f'srd_.get({num}).{var}'
+
+    @staticmethod
+    def write_lambda(capture, sig, body):
+        return f'[{capture}]({sig}){{{body}}}'
+
+    def write_arg(self, var):
+        if isinstance(var, resolver.cNVar):
+            if sum(var.order) != 0:
+                return f'{var.name.split(".", 1)[1]}_{var.order[0]}'
+            else:
+                var = var.name
+
+        lookup_result = self.space.locate_var(var)
+        if isinstance(lookup_result, tuple):
+            return lookup_result[1]
+        else:
+            return var
+
+    def __iter__(self):
+        for step in self.space.steps:
+            yield self.write(step)
+
+
 class Space:
+
     def __init__(self):
-        self.watched = odict()
-        self.objects = odict()
-        # FIXME: static initialization fiasco, shall be ordered instead
-        self.globals = {
-            "t": Variable('t', 'double', Variable.CTX_GLOBAL, 1),
-            "step": Variable('step', 'double', Variable.CTX_GLOBAL, 1e-3)
-        }
-        self.vars = odict()
-        self.funcs = {}  # reserved
+        self.objs = odict()
+        self.watches = odict()
+        self.globals = {'t': Var(cTypes(cTypes.BaseEnum.DOUBLE, True, 0), 1),
+                        'step': Var(cTypes(cTypes.BaseEnum.DOUBLE, False, 0), 0.001)}
+        self.tmps = {}
         self.rules = []
+        self.loopctl = set()
         self.steps = None
 
-    # FIXME: issue a warning instead of silent overwriting
-    def addWatch(self, name, type='double'):
-        self.watched[manglers.generic_mem(name)] = Variable(name, type, Variable.CTX_MEM)
+    def addRule(self, rule, dom=None, src=None):
+        self.rules.append(
+            RuleType(src if src else src_tracker(0, 0), dom, rule))
 
-    def addObj(self, name, init):
-        self.objects[name] = Variable(name, 'Object', Variable.CTX_GLOBAL, init)
+    def addObj(self, obj, vals, src=None):
+        if obj in self.objs:
+            if not warning.warn_ask(f'Object named {obj} exists, continue?'):
+                return
+        self.objs[obj] = ObjType(src if src else src_tracker(0, 0), obj, vals)
 
-    def declTempVar(self, name, type):
-        self.vars[name] = type
+    def addTmp(self, var, types, src=None):
+        self.tmps[var] = DeclType(src, types)
 
-    def addRule(self, content):
-        self.rules.append(Rule(content))
+    def addLoopctl(self, var, src):
+        pass
 
-    def addCondRule(self, *args):
-        self.rules.append(CondRule(args))
+    def addWatch(self, var, types, src=None):
+        if var in self.watches:
+            if not warning.warn_ask(f'Watch {var} exists, continue?'):
+                return
+        self.watches[var] = cTypes(types, False, 0)
 
-    def process(self):
-        print("Processing...")
-        known = list(chain(self.watched, self.globals))
-        rrs = [RuleResolvingStruct(idx, i) for idx, i in enumerate(self.rules)]
-
-        def find_candidate(known, all_vars):
-            for i in known:
-                for j in all_vars:
-                    if manglers.var_match(i, j.name):
-                        yield j
-
-        def rotate(known, update):
-            for i in update:
-                generic_name = manglers.generic_mem(manglers.strip_mem(i.name))
-                try:
-                    known.remove(generic_name)
-                    known.append(generic_name)
-                except ValueError:
-                    pass
-
-        # must loop by reference
+    def processRules(self):
+        def available(NVar):
+            v = self.locate_var(NVar.name)
+            return NVar.order[0] == 0 and v is not None and not isinstance(v, tuple)
+        # WE ASSUMED THAT UPDATING A VARIABLE TWICE IN A CYCLE IS ILLEGAL
+        self.steps = []
         idx = 0
-        while idx < len(rrs):
-            Idx = idx
+        while idx < len(self.rules):
             eqn_count = 0
             needMore = True
+            all_vars = set()
             while needMore:
-                Idx += 1
                 eqn_count += 1
-                # validate selection here
-                all_vars = {var for i in rrs[idx:Idx] for var in i.diffs}
-                update = {var for var in all_vars if
-                          not any(manglers.var_match(kvar, var.name) for kvar in known)}
-                needMore = len(update) > eqn_count
-            update.update(islice(find_candidate(known, all_vars), eqn_count - len(update)))
-            rrs[idx:Idx] = [RulePack(rrs[idx:Idx], update)]
-            rrs[idx].resolve(known)
-            rotate(known, update)
-            idx = Idx
+                all_vars.update(self.rules[idx + eqn_count - 1].diffs)
+                unknowns = {var for var in all_vars if not available(var)}
+                needMore = len(unknowns) > eqn_count
+            self.steps += resolve(idx, self.rules[idx:idx + eqn_count], unknowns)
+            idx += eqn_count
 
-        self.steps = removeDup(step for pack in rrs for step in pack.steps)
-        self.steps = [SolvingStep(i) for i in self.steps]
-
-        # finalize the steps, ensure update are propagated to watched values.
-        updated_variables = {var: idx for idx, step in enumerate(self.steps) for var in
-                             step.updates}
-        update_not_propagated = set()
-        for NVar in updated_variables:
-            var, form = NVar.name, NVar.order
-            generic_name = manglers.generic_mem(manglers.strip_mem(var))
-            if form != 0 and generic_name in self.watched:
-                update_not_propagated.add(NVar)
-        # propagate the update to its watched base
-        for NVar in update_not_propagated:
-            idx = updated_variables[NVar]
-            base_step = self.steps[idx]
-            self.steps[idx] = SolvingStep((base_step, NVar.name))
+        # propagate updates here
+        updated = {}
+        for i, (_, var) in enumerate(self.steps):
+            if var.order[0] < updated.get(var.name, 256): # FIXME: Magic value, shall be inf
+                updated[var.name] = i, var.order
+        for var, (i, _) in updated.items():
+            self.steps[i] = self.steps[i], resolver.cNVar(var, 0)
 
     def write(self):
-        # FIXME: This section should be generated
-        def global_vars(var_vals, iterlen, object_len):
-            for i in var_vals:
-                yield f'{i.type} {i.name} = {i.value};'
-            yield f'combinations<{iterlen}> comb_(0, {object_len});'
-
-        print('Generating code...')
         gen = templating.template('codegen/template')
-
-        def consume(gen, send):
-            while True:
-                n = next(gen)
-                if n is not None:
-                    yield n
-                else:
-                    yield gen.send(send)
-                    break
-
-        yield from consume(gen, (f'{var.type} {var.name};' for var in self.watched.values()))
-        yield from consume(gen, self.objects)
-        yield from consume(gen, (f'obj.{var.name}' for var in self.watched.values()))
+        consume = templating.consume
+        yield from consume(gen, (f'{type} {name};' for name, type in self.watches.items()))
+        yield from consume(gen, self.objs)
+        yield from consume(gen, (f'obj.{var}' for var in self.watches))
         yield from consume(gen,
-                           (', '.join(str(i) for i in obj.value) for obj in self.objects.values()))
-        yield from consume(gen, global_vars(self.globals.values(), 1, len(self.objects)))
-        yield from consume(gen, (i.write(self, self.rules) for i in self.steps))
+                           (', '.join(str(i) for i in obj.vals) for obj in self.objs.values()))
+        yield from consume(gen, (f'{tv.type} {name} = {tv.val};' for name, tv in self.globals.items()))
+        yield from consume(gen, [f'combinations<1> comb_(0, {len(self.objs)});'])  # FIXME: insert true value when tested
+        writer = StepWriter(self)
+        yield from consume(gen, writer)
         yield from gen
 
-    def __repr__(self):
-        return f'watched: {self.watched}\nvars: {self.globals}\nrules:\n' + '\n'.join(
-            repr(i) for i in self.rules)
-
-
-class Variable:
-    CTX_GLOBAL = 0
-    CTX_MEM = 1
-    CTX_TMP = 2
-
-    def __init__(self, name, type, ctx, initializer=None):
-        self.name = name
-        self.type = type
-        self.value = initializer
-
-
-# WE LEAVE A GLOBAL VARIABLE HERE WHICH IS BAD
-# TODO: ONCE TESTED, ENCAPSULATE IT IN A CLASS
-STEP_BYPRODUCT = {}
-
-
-class Op:
-    def __init__(self, name, argc=1, writer=None):
-        self.name = name
-        self.argc = argc
-        self.writer = writer
-
-    def write(self, args):
-        if self.writer:
-            return self.writer(args)
-        else:
-            return '{}({})'.format(self.name, ', '.join(Expr.write(arg) for arg in args))
-
-    def __repr__(self):
-        return 'Op:' + self.name
-
-
-@contextmanager
-def write_var_as(on, replace):
-    old = Expr.VAR_WRITER.get(on)
-    Expr.VAR_WRITER[on] = replace
-    yield
-    if old:
-        Expr.VAR_WRITER[on] = old
-    else:
-        del Expr.VAR_WRITER[on]
-
-
-def lambdify(expr, vars):
-    """
-    Convert an expression into lambda. Caller shall ensure all arguments of the lambda shall be
-    compatible with target naming restrictions. All arguments are written through proper_write_var.
-    """
-    lambda_args = ', '.join('double ' + Expr.proper_write_var(i) for i in vars)
-    return f'[]({lambda_args}){{ return {Expr.write(expr)}; }}'
-
-
-DIFF_CHAIN = set()
-
-
-@contextmanager
-def register_diff_chain_wrt(var):
-    global DIFF_CHAIN
-    DIFF_CHAIN.add(var)
-    yield
-    DIFF_CHAIN.remove(var)
-
-
-def diff_writer(args):
-    if len(args) == 1:
-        expr = args[0]
-        wrt = 't'
-    else:
-        expr, wrt = args
-    if wrt != 't':
-        raise NotImplementedError()
-    diffs = set(expr.findDerivatives())
-    chain = set()
-    for var in DIFF_CHAIN:
-        test = resolver.cNVar(var.name, var.order - 1)
-        if test in diffs:
-            chain.add((var, test))
-    if chain:
-        flambda = lambdify(expr, {i[0].name for i in chain})
-        if len(chain) > 1:  # FIXME: Multi-dimensional chain rule broken
-            raise NotImplementedError()
-        vdiff, vnow = chain.pop()
-        return f'math::calculus::fdiff({flambda}, {Expr.proper_write_var(vnow)}) * {Expr.proper_write_var(vdiff)}'
-    else:
-        fnow = Expr.write(expr)
-        with ExitStack() as stack:
-            # FIXME: This is still broken if expression involves variable and its derivative
-            vars = set(expr.listVars())
-            for i in vars:
-                stack.enter_context(write_var_as(i, Expr.lambda_arg(i)))
-            flambda = lambdify(expr, vars)
-        fvars = [Expr.proper_write_var(i) for i in vars]
-        # FIXME: round away from zero only, should be configurable
-        args = ', '.join(f'take_step({i}, {i})' for i in fvars)
-        return f'({flambda}, {args} - {fnow}) / step'
-
-
-OP_TO_INST = {
-    '+': Op('math::op::add', 2),
-    '-': Op('math::op::sub', 2),
-    '*': Op('math::op::mul', 2),
-    '/': Op('math::op::div', 2),
-    'pow': Op('std::pow', 2),
-    'sin': Op('std::sin', 1),
-    'cos': Op('std::cos', 1),
-    'tan': Op('std::tan', 1),
-    'sqrt': Op('math::sqrt', 1),
-    'diff': Op('diff', 1, diff_writer),
-}
-
-
-class SolvingStep:
-    def __init__(self, content):
-        self.content = content
-        if isinstance(self.content[0], list):
-            self.type = 0
-        elif isinstance(self.content[0], int):
-            self.type = 1
-        else:
-            self.type = 2
-
-    def write(self, space, pack):
-        STEP_START = ''
-        STEP_END = ''
-        if self.type == 0:
-            return STEP_START + f'math::solver::algebraic_sys({pack[self.content[0]]});\n' + STEP_END
-        elif self.type == 1:
-            rule_id, solveFor = self.content
-            name = solveFor.name
-            with write_var_as(name, manglers.fetch_mem(name)):
-                if solveFor.order == 0:  # an ultimate request
-                    # TODO: This part is broken
-                    bind = manglers.mem_cur(name)
-                    seed = manglers.mem_last(name)
-                    return STEP_START + f'{bind} = math::solver::algebraic_single([&](double {name}){{\n' + \
-                           pack[rule_id].write() + f'}}, {seed});\n' + STEP_END
-                else:  # request from diff
-                    # chain rule must be considered if the unknown is a derivative.
-                    # See make_cs_diff_writer for implementation
-                    seed = 0
-                    with write_var_as(solveFor, Expr.lambda_arg(solveFor)), register_diff_chain_wrt(solveFor):
-                        return f'[&](double t, double {Expr.proper_write_var(name)}){{' \
-                               + f'return math::solver::algebraic_single([&](double {Expr.proper_write_var(solveFor)}){{\n' \
-                               + pack[rule_id].write() + f'}}, {seed}); }}'
-        else:
-            base, var = self.content
-            return STEP_START + f'{manglers.mem_cur(var)} = math::solver::differential(\n' \
-                   + f'{base.write(space, pack)}, time_, {manglers.mem_last(var)}, step).first;\n' + STEP_END
-
-    def __str__(self):
-        if self.type == 0:
-            return f'ALG_M {self.content}'
-        elif self.type == 1:
-            return f'ALG_S {self.content[0]} -> {self.content[1]}'
-        else:
-            return f'DIFF_S ({self.content[0]}) -> {self.content[1]}'
-
-    @property
-    def updates(self):
-        if self.type == 0:
-            return self.content[1]
-        else:
-            return [self.content[1]]
-
-
-class Rule:
-    """Simple structure that stores a rule"""
-
-    def __init__(self, content):
-        self.lhs, self.rhs = Expr(expr.stringToExpr(content[0])), Expr(expr.stringToExpr(content[1]))
-
-    def write(self):
-        return 'return math::op::sub(' + self.lhs.write() + ',\n' + self.rhs.write() + ');\n'
-
-    def __repr__(self):
-        return f'Rule {self.lhs} = {self.rhs}'
-
-
-class RulePack:
-    """
-    This is the class representing packed rules (RuleResolvingStruct) on
-    highest level. That is, the pack is resolved further to actual steps,
-    e.g. to solve as ODE or algebraic system, etc.
-    """
-
-    def __init__(self, content, solveFor):
-        self.pack = content
-        self.solveFor = solveFor
-        self.steps = None
-
-    def resolve(self, known):
-        to_remove = {var for var in known if not any(manglers.var_match(svar.name, var) for svar in self.solveFor)}
-        for i in self.pack:
-            # exclude known variables
-            i.diffs = {var for var in i.diffs if not any(manglers.var_match(kvar, var.name) for kvar in to_remove)}
-
-        self.steps = resolver.resolve(self.pack, self.solveFor)
-
-    def __repr__(self):
-        return '{\n\t' + '\n\t'.join(repr(i) for i in self.pack) + '\n} -> ' + repr(self.solveFor)
-
-
-class CondRule:
-    """
-    None condition is used for else
-    Empty content is used for assertion
-    """
-
-    def __init__(self, content):
-        self.crpack = content
-        self.vars = set()
-        for cond, rulepack in self.crpack:
-            for rule in rulepack:
-                self.vars |= rule.vars
-
-    COMP = ['==', '=', '!=', '<>', '<=', '<', '>=', '>']  # ORDER MATTERS, PREFER LONGER
-
-    @staticmethod
-    def writeCond(condition):
-        for i in CondRule._infixCondToPrefix(condition):
-            if isinstance(i, tuple):
-                yield f'{i[0]}\n'
+    def locate_var(self, var):
+        if var.startswith('$'):
+            obj, watch = var[1:].split('.', 1)
+            base_watch = self.watches[watch]
+            if obj.isdigit():
+                return int(obj), watch, base_watch
             else:
-                comp = next(x for x in CondRule.COMP if x in i)
-                lhs, rhs = i.split(comp)
-                yield from Expr.write(expr.stringToExpr(lhs))
-                yield from Expr.write(expr.stringToExpr(rhs))
-
-    @staticmethod
-    def _infixCondToPrefix(condition):
-        if isinstance(condition, tuple):
-            if len(condition) is 2:
-                yield (condition[0], 1)  # protect operator with tuple
-                yield condition[1]
-            elif len(condition) is 3:
-                yield (condition[1], 2)
-                yield from CondRule._infixCondToPrefix(condition[0])
-                yield from CondRule._infixCondToPrefix(condition[2])
+                return self.objs[obj].get_watch(base_watch)
+        elif var in self.tmps:
+            return self.tmps[var]
+        elif var in self.globals:
+            return self.globals[var]
         else:
-            yield condition
-
-    @staticmethod
-    def writeRules(rulepack):
-        for rule in rulepack:
-            yield from rule.write()
-
-    def write(self):
-        yield 'if ('
-        yield from self.writeCond(self.crpack[0])
-        yield ') {\n'
-        yield from self.writeRules(self.crpack[1])
-        yield '}\n'
-        if not self.crpack[-2]:
-            for i, j in self.crpack[1:-1]:
-                yield 'else if (\n'
-                yield from self.writeCond(i)
-                yield from self.writeRules(j)
-            yield 'else {\n'
-            yield from self.writeCond(self.crpack[-2])
-            yield from self.writeRules(self.crpack[-1])
-        else:
-            for i, j in self.crpack[1:]:
-                yield 'else if('
-                yield from self.writeCond(i)
-                yield from self.writeRules(j)
-
-    def __repr__(self):
-        return repr(self.crpack)
-
-
-class RuleResolvingStruct:
-    """Structure that holds necessary information to resolve rules to steps."""
-
-    def __init__(self, idx, rule):
-        self.idx = idx
-        self.rule = rule
-        self.diffs = set(chain(rule.lhs.findDerivatives(), rule.rhs.findDerivatives()))
-
-    def __repr__(self):
-        return repr(self.rule)
+            return self.objs[var]

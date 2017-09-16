@@ -1,4 +1,4 @@
-def template(filename, delim = '[[>>>]]'):
+def template(filename, delim='[[>>>]]'):
     with open(filename) as f:
         for i in f:
             idx = i.find(delim)
@@ -8,3 +8,13 @@ def template(filename, delim = '[[>>>]]'):
                     yield from i[:idx] + text + i[idx + len(delim):]
             else:
                 yield i
+
+
+def consume(gen, send):
+    while True:
+        n = next(gen)
+        if n is not None:
+            yield n
+        else:
+            yield gen.send(send)
+            break

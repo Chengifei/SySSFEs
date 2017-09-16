@@ -69,13 +69,12 @@ PyObject* resolve(PyObject*, PyObject* args) {
                 const cNVar* i = static_cast<cNVar*>(item.get());
                 vars.insert(i->var);
             }
-            auto idx = PyExc(PyObject_GetAttrString(r, "idx"), nullptr);
-            Pack.emplace_back(PyLong_AsLong(idx), std::move(vars));
+            Pack.emplace_back(i, std::move(vars));
         }
         PyScoped iter(PyExc(PyObject_GetIter(known), nullptr));
         PyScoped item(PyIter_Next(iter));
         for (; item; item = PyScoped(PyIter_Next(iter))) {
-            knowns.insert(NVar(PyUnicode_AsUTF8(item.get()), 0));
+            knowns.insert(static_cast<cNVar*>(item.get())->var);
         }
     }
     catch (Python_API_Exception) {

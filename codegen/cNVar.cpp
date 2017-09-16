@@ -14,7 +14,7 @@ PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     else if (strcmp(attr_name, "order") == 0) {
         PyObject* L = PyList_New(8);
         for (std::size_t i = 0; i != 8; ++i)
-            PyList_SET_ITEM(L, 0, PyLong_FromLong(static_cast<cNVar*>(self)->var.order[i]));
+            PyList_SET_ITEM(L, i, PyLong_FromLong(static_cast<cNVar*>(self)->var.order[i]));
         return L;
     }
     PyErr_Format(PyExc_AttributeError,

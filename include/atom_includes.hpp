@@ -13,6 +13,7 @@
 #include <vector>
 #include <fstream>
 #include "math/solvers.hpp"
+#include "math/calculus.hpp"
 #include "math/operators.hpp"
 
 namespace types {
