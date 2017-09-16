@@ -111,7 +111,7 @@ struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
 template <class T>
 struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
     typedef typename T::value_type value_type;
-    const T& pool;
+    const T& pool; // TODO: Make a copy here, and all further are moves.
     std::vector<value_type> result;
     int idx = 0;
     const std::size_t sz;
@@ -120,14 +120,15 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
         : pool(pool), sz(sz), indices(std::make_unique<std::size_t[]>(sz)) {
         indices[0] = 0;
         result.reserve(sz);
+        resize();
     }
     powerset& operator++() {
-        if (indices[idx] + (result.size() - idx) != sz) {
+        if (indices[idx] + (result.size() - idx) != pool.size()) {
             ++indices[idx];
             result[idx] = pool[indices[idx]];
             return *this;
         }
-        while (indices[idx] + (result.size() - idx) == sz) {
+        while (indices[idx] + (result.size() - idx) == pool.size()) {
             --idx;
             if (idx == -1) {
                 resize();
@@ -144,7 +145,7 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
         return *this;
     }
   	bool exhausted() {
-      	return result.size() == idx + 1;
+      	return result.empty();
     }
   	std::vector<value_type>& operator*() {
       	return result;
@@ -166,7 +167,7 @@ private:
             }
         }
         else {
-            result.resize(idx + 1);
+            result.clear();
         }
     }
 };

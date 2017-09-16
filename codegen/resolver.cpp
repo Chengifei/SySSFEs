@@ -77,6 +77,11 @@ ResolvingOrder RuleResolver::get() {
 bool RuleResolver::process() {
     // TODO: Independent starts selection shall be deterministic, then we can
     // even eliminate optionals.
+    auto Pack = pack;
+    if (!alg_consistent())
+        return false;
+    if (validate_resolution({}))
+        return true;
     for (auto attempt : make_eqn_try(pack)) {
         unsigned step_count = 0;
         const auto& starts = *attempt.second;
