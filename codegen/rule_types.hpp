@@ -69,6 +69,9 @@ struct ResolvingOrder {
     void remove(std::size_t idx) noexcept {
         seq.resize(seq.size() - idx);
     }
+    void clear() noexcept {
+        seq.clear();
+    }
     std::size_t size() const noexcept {
         return seq.size();
     }
@@ -117,9 +120,11 @@ public:
     bool process();
 private:
     /// The function may fail, and returns empty optionals on fail.
-    std::optional<unsigned> alg_consistent();
+    /// use tmp to address variables that are marked solved but shall not be considered in alg_consistent
+    /// e.g. starting equation since they are unconditionally solved but require cycle update.
+    std::optional<unsigned> alg_consistent(const std::vector<NVar>& tmp = {});
     /// The function may fail, and returns false on fail.
-    bool broadcast(const NVar&, bool enable_cycle = false);
-    bool validate_resolution(const std::vector<NVar>&) const noexcept;
+    bool broadcast(const NVar&) noexcept;
+    bool validate_resolution() const noexcept;
 };
 #endif

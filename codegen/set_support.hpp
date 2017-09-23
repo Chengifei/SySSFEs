@@ -26,8 +26,8 @@ C1 union_sets(const C1& S1, const C2& S2) {
 template <class C1, class C2>
 C1 intersect_sets(const C1& S1, const C2& S2) {
     C1 ret;
-    for (const auto& i: S1)
-        if (S2.count(i))
+    for (const auto& i: S2)
+        if (S1.count(i))
             ret.insert(i);
     return ret;
 }

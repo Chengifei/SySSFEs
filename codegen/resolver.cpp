@@ -52,9 +52,7 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     }
 };
 
-bool RuleResolver::validate_resolution(const std::vector<NVar>& need_update) const noexcept {
-    if (!is_subset(need_update, cycle))
-        return false;
+bool RuleResolver::validate_resolution() const noexcept {
     for (const Rule& eqn : pack)
         if (!eqn.unknowns.empty())
             return false;
@@ -80,7 +78,7 @@ bool RuleResolver::process() {
     auto Pack = pack;
     if (!alg_consistent())
         return false;
-    if (validate_resolution({}))
+    if (validate_resolution())
         return true;
     for (auto attempt : make_eqn_try(pack)) {
         unsigned step_count = 0;
@@ -100,53 +98,46 @@ bool RuleResolver::process() {
         //    once all the other variables are known.
         for (const auto& var : starts)
             if (!broadcast(var))
-                goto fail;
-        if (std::optional<unsigned> a_s = alg_consistent())
+                break;
+        if (std::optional<unsigned> a_s = alg_consistent(starts))
             step_count += *a_s;
-fail:
-        if (validate_resolution(starts))
+        if (validate_resolution())
             return true;
         else {
             pack = std::move(Pack);
-            order.remove(step_count);
+            order.clear();
         }
     }
     return false;
 }
 
-bool RuleResolver::broadcast(const NVar& exact, bool enable_cycle) {
+bool RuleResolver::broadcast(const NVar& exact) noexcept {
     bool all_succeeded = true; // do as much as possible, don't fast fail.
     for (Rule& eqn : pack)
         for (const NVar& var : eqn.vars)
             if (var.name == exact.name)
-                if (!verify_then_remove(eqn.unknowns, var)
-                    && (enable_cycle ? !verify_then_insert(cycle, var) : false))
+                if (!verify_then_remove(eqn.unknowns, var))
                     all_succeeded = false;
     return all_succeeded;
 }
 
-std::optional<unsigned> RuleResolver::alg_consistent() {
+std::optional<unsigned> RuleResolver::alg_consistent(const std::vector<NVar>& tmp) {
     unsigned step_count = 0;
     // save the current state, or the state might change while updating
-    std::vector<Rule*> to_be_updated;
-    for (auto& rule : pack) {
-        if (rule.unknowns.size() == 1)
-            to_be_updated.push_back(&rule);
+    std::vector<std::pair<std::size_t, NVar>> to_be_updated;
+    for (const auto& rule : pack) {
+        if (rule.unknowns.size() + intersect_sets(rule.vars, tmp).size() == 1)
+            to_be_updated.emplace_back(rule.unique_id, *rule.unknowns.cbegin());
     }
-    for (auto ptr : to_be_updated) {
-        Rule& eqn = *ptr;
-        if (eqn.unknowns.empty()) {
-            order.remove(step_count);
-            return std::optional<unsigned>();
-        }
-        NVar to_update = *eqn.unknowns.begin(); // will be deleted soon, get a copy
-        order.add_alg(eqn.unique_id, to_update);
-        step_count += 1;
+    for (const auto& rule : to_be_updated) {
         // recurse for the further variables
-        if (!broadcast(to_update, true)) {
-            order.remove(step_count);
-            return std::optional<unsigned>();
+        if (!broadcast(rule.second)) {
+            if (!verify_then_insert(cycle, rule.second))
+                 return std::optional<unsigned>();
         }
     }
+    for (const auto& rule : to_be_updated)
+        order.add_alg(rule.first, rule.second);
+    step_count += to_be_updated.size();
     return std::optional<unsigned>(step_count);
 }
