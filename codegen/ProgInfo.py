@@ -91,22 +91,17 @@ def diff_writer(args, default_writer: 'StepWriter'):
     if not solving:
         return f'math::calculus::fdiff({default_writer.write_lambda("&", "double t", "return " + default_writer.write_expr(expr) + ";")}, t)'
     else:
-        override_dict = {}
-        var = solving.pop()
-        write = default_writer.write_arg(var)
-        override_dict[var] = write
         # When using chain-rule we have to adjust writing scheme for base
         # variables as well
-        var_base = resolver.cNVar(var.name, var.order[0] - 1)
-        write_base = default_writer.write_arg(var_base)
+        var = solving.pop()
         if var.order[0] > 1:
-            override_dict[var_base] = write_base
+            var_base = resolver.cNVar(var.name, var.order[0] - 1)
         else:
-            override_dict[var.name] = write_base
-        original_write = default_writer.VarWriter.write(var_base)
-        with default_writer.VarWriter.tmp_override(override_dict):
-            text = f'math::calculus::fdiff({default_writer.write_lambda("&", f"double {write_base}", "return " + default_writer.write_expr(expr) + ";")}, {original_write})'
-        return text + f' * {write}'
+            var_base = var.name
+        original_write = default_writer.VarWriter.write_value(var_base)
+        with default_writer.VarWriter.tmp_override({var_base: default_writer.write_arg(var_base)}):
+            text = f'math::calculus::fdiff({default_writer.write_lambda("&", [var_base], "return " + default_writer.write_expr(expr) + ";")}, {original_write})'
+            return text + f' * {default_writer.VarWriter.write(var)}'
 
 OP = {
     '+': Op('math::op::add', 2),
@@ -175,25 +170,30 @@ class StepWriter:
 
     def write(self, step):
         use, update = step
-        if self.noBind:
-            bind = ''
-            end = ''
-        else:
-            bind = f'{self.VarWriter.write(update)} = '
-            end = ';'
         if isinstance(use, int):
+            if self.noBind:
+                bind, end = '', ''
+            else:
+                bind = f'{self.VarWriter.write(update)} = '
+                end = ';'
             return bind + self.write_alg(
                 self.write_lambda('&',
-                                  f'double {self.write_arg(update)}',
+                                  [update],
                                   f'return {self.write_rule(self.space.rules[use])};'),
-                self.write_expr(update)) + end
+                                  self.VarWriter.write_value(update)) + end
         elif isinstance(use, tuple):
+            if self.noBind:
+                bind, end = '', ''
+            else:
+                bind = f'{self.VarWriter.write(update)} = '
+                end = ';'
             update_intermediate = use[1]
             self.state.append([update_intermediate])
-            with self.tmp_flag(self.noBind, True), self.tmp_flag(self.VarWriter.UnrecordedAsConst, True):
+            with self.tmp_flag(self.noBind, True), self.tmp_flag(self.VarWriter.ForceValue, True),\
+                    self.VarWriter.tmp_override({update_intermediate: self.write_arg(update_intermediate)}):
                 return bind + self.write_diff(
-                    self.write_lambda('&', 'double t, double x', f'return {self.write(use)};'),
-                    't', self.write_expr(update),
+                    self.write_lambda('&', ['t', update_intermediate], f'return {self.write(use)};'),
+                    't', self.VarWriter.write_value(update),
                     'step') + '.first' + end
 
     @staticmethod
@@ -226,8 +226,8 @@ class StepWriter:
             # controls writing of unrecorded variable
             # i.e. the variables computed on demand
             self.look_up = parent
-            self.UnrecordedAsConst = Flag(False)
-            self.override = {}
+            self.ForceValue = Flag(False)
+            self.override = {} # primarily used for lambda
 
         @contextmanager
         def tmp_override(self, iter):
@@ -241,39 +241,58 @@ class StepWriter:
                 return self.override[var]
             elif isinstance(var, resolver.cNVar):
                 if sum(var.order) != 0:
-                    if not self.UnrecordedAsConst:
-                        return f'{self.write(var.name)}_{var.order[0]}'
-                    else:
-                        return '0'
+                    return f'{self.write(var.name)}_{var.order[0]}'
                 else:
                     return self.write(var.name)
             else:
                 lookup_result = self.look_up(var)
                 if isinstance(lookup_result, tuple):
-                    return self.write_watch(lookup_result[0], lookup_result[1])
+                    return self.write_watch_new(lookup_result[0], lookup_result[1])
+                else:
+                    return var
+
+        def write_value(self, var):
+            if isinstance(var, resolver.cNVar):
+                if sum(var.order) != 0:
+                    return 0  # TODO: Check for step by-product of differential solver
+                else:
+                    return self.write_value(var.name)
+            else:
+                lookup_result = self.look_up(var)
+                if isinstance(lookup_result, tuple):
+                    return self.write_watch_last(lookup_result[0], lookup_result[1])
                 else:
                     return var
 
         @staticmethod
-        def write_watch(num, var):
+        def write_watch_new(num, var):
             return f'srd_.get({num}).{var}'
 
-    @staticmethod
-    def write_lambda(capture, sig, body):
-        return f'[{capture}]({sig}){{{body}}}'
+        @staticmethod
+        def write_watch_last(num, var):
+            return f'last_data_.get({num}).{var}'
 
-    def write_arg(self, var):
+    def write_lambda(self, capture, args, body):
+        return f'[{capture}]({", ".join(self._write_arg(i) for i in args)}){{{body}}}'
+
+    def _write_arg(self, var):
         if isinstance(var, resolver.cNVar):
             if sum(var.order) != 0:
-                return f'{var.name.split(".", 1)[1]}_{var.order[0]}'
+                # FIXME: Duplicate code
+                lookup_result = self.space.locate_var(var.name)
+                assert isinstance(lookup_result, tuple) # must be a watch to be differentiated
+                return f'{lookup_result[2]} {var.name.split(".", 1)[1]}_{var.order[0]}'
             else:
                 var = var.name
 
         lookup_result = self.space.locate_var(var)
         if isinstance(lookup_result, tuple):
-            return lookup_result[1]
+            return f'{lookup_result[2]} {lookup_result[1]}'
         else:
-            return var
+            return f'{lookup_result.type.base} {var}'
+
+    def write_arg(self, var):
+        return self._write_arg(var).split(' ', 1)[1]
 
     def __iter__(self):
         for step in self.space.steps:
