@@ -334,9 +334,14 @@ class Space:
         self.watches[var] = cTypes(types, False, 0)
 
     def processRules(self):
+
+        #TODO: Check consistency of boundary values first
+
         def available(NVar):
+            if sum(NVar.order):
+                return False
             v = self.locate_var(NVar.name)
-            return NVar.order[0] == 0 and v is not None and not isinstance(v, tuple)
+            return not isinstance(v, ObjType)
         # WE ASSUMED THAT UPDATING A VARIABLE TWICE IN A CYCLE IS ILLEGAL
         self.steps = []
         idx = 0
@@ -348,17 +353,18 @@ class Space:
                 eqn_count += 1
                 all_vars.update(self.rules[idx + eqn_count - 1].diffs)
                 unknowns = {var for var in all_vars if not available(var)}
-                needMore = len(unknowns) > eqn_count
+                needMore = len({i.name for i in unknowns}) > eqn_count
             self.steps += resolve(idx, self.rules[idx:idx + eqn_count], unknowns)
             idx += eqn_count
 
         # propagate updates here
         updated = {}
         for i, (_, var) in enumerate(self.steps):
-            if var.order[0] < updated.get(var.name, 256): # FIXME: Magic value, shall be inf
+            if var.order[0] < updated.get(var.name, (None, [256]))[1][0]: # FIXME: Magic value, shall be inf
                 updated[var.name] = i, var.order
-        for var, (i, _) in updated.items():
-            self.steps[i] = self.steps[i], resolver.cNVar(var, 0)
+        for var, (i, order) in updated.items():
+            if sum(order) != 0:
+                self.steps[i] = self.steps[i], resolver.cNVar(var, 0)
 
     def write(self):
         gen = templating.template('codegen/template')
@@ -378,10 +384,7 @@ class Space:
         if var.startswith('$'):
             obj, watch = var[1:].split('.', 1)
             base_watch = self.watches[watch]
-            if obj.isdigit():
-                return int(obj), watch, base_watch
-            else:
-                return self.objs[obj].get_watch(base_watch)
+            return int(obj) if obj.isdigit() else obj, watch, base_watch
         elif var in self.tmps:
             return self.tmps[var]
         elif var in self.globals:
