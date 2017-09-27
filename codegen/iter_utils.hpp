@@ -36,15 +36,22 @@ public:
 };
 
 template <class T>
-struct random_iterator_view {
-    typedef typename T::reference ref_type;
-    T begin;
-    T end;
+struct as_array {
+    typedef typename std::remove_pointer<T>::type ref_type;
+    T _begin;
+    T _end;
+    as_array(T begin, std::size_t sz) : _begin(begin), _end(begin + sz) {};
     ref_type operator[](int idx) const {
-        return *(begin + idx);
+        return *(_begin + idx);
     }
     std::size_t size() const {
-        return end - begin;
+        return _end - _begin;
+    }
+    T begin() const {
+        return _begin;
+    }
+    T end() const {
+        return _end;
     }
 };
 
@@ -70,41 +77,47 @@ public:
 template <class T>
 struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
     typedef typename T::value_type value_type;
-    const iter_utils::random_iterator_view<T> pool;
-    std::vector<std::size_t> indices;
-    std::vector<value_type> result;
-    const std::size_t sz;
-    combination(T begin, T end, std::size_t sz)
-        : pool{begin, end}, sz(sz) {
-        indices.reserve(sz);
-        result.reserve(sz);
+    const std::size_t num_in_pool;
+    std::unique_ptr<value_type[]> pool;
+    std::unique_ptr<std::size_t[]> indices;
+    /* const */ std::size_t* indices_end;
+    std::unique_ptr<value_type[]> result;
+    std::size_t* cursor;
+    combination(T begin, T end, std::size_t sz): num_in_pool(end - begin) {
+        result = std::make_unique<value_type[]>(sz);
+        indices = std::make_unique<std::size_t[]>(sz);
         for (auto i : range<std::size_t>(0, sz)) {
-            indices.push_back(i);
-            result.push_back(pool[i]);
+            indices[i] = i;
+            result[i] = std::move(begin[i]);
         }
+        indices_end = indices.get() + sz;
+        cursor = indices_end - 1;
+        pool = std::make_unique<value_type[]>(num_in_pool);
+        for (auto i : range<std::size_t>(sz, num_in_pool))
+            pool[i] = std::move(begin[i]);
     }
     combination& operator++() {
-        std::size_t idx = sz - 1;
-        while (indices[idx] + (sz - idx) == pool.size()) {
-            if (idx == 0) {
-                result.clear();
+        while (*cursor + (indices_end - cursor) == num_in_pool) {
+            --cursor;
+            if (cursor - indices.get() == -1) {
+                result = nullptr;
                 return *this;
             }
-            --idx;
         }
-        ++indices[idx];
-        result[idx] = pool[indices[idx]];
-        for (std::size_t _idx = idx + 1; _idx != sz; ++_idx) {
-            indices[_idx] = indices[_idx - 1] + 1;
-            result[_idx] = pool[indices[_idx]];
+        ++*cursor;
+        result[cursor - indices.get()] = std::move(pool[*cursor]);
+        for (++cursor; cursor != indices_end; ++cursor) {
+            *cursor = *(cursor - 1) + 1;
+            result[cursor - indices.get()] = std::move(pool[*cursor]);
         }
+        --cursor;
         return *this;
     }
   	bool exhausted() {
-      	return result.empty();
+      	return static_cast<bool>(result);
     }
-  	std::vector<value_type>& operator*() {
-      	return result;
+  	const value_type* operator*() {
+      	return result.get();
     }
 };
 

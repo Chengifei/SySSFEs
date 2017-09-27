@@ -122,7 +122,8 @@ private:
     /// The function may fail, and returns empty optionals on fail.
     /// use tmp to address variables that are marked solved but shall not be considered in alg_consistent
     /// e.g. starting equation since they are unconditionally solved but require cycle update.
-    std::optional<unsigned> alg_consistent(const std::vector<NVar>& tmp = {});
+    template <typename T>
+    std::optional<unsigned> alg_consistent(const T& tmp);
     /// The function may fail, and returns false on fail.
     bool broadcast(const NVar&) noexcept;
     bool validate_resolution() const noexcept;

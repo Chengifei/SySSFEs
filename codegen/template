@@ -1,20 +1,20 @@
 #include "atom_includes.hpp"
-struct Object {
+struct object_ {
     [[>>>]]
 };
 
 struct shared_ {
-    Object [[>>>]];
-    Object& get(std::size_t idx) noexcept {
-        return reinterpret_cast<Object*>(this)[idx];
+    object_ [[>>>]];
+    object_& get(std::size_t idx) noexcept {
+        return reinterpret_cast<object_*>(this)[idx];
     }
-    const Object& get(std::size_t idx) const noexcept {
-        return reinterpret_cast<const Object*>(this)[idx];
+    const object_& get(std::size_t idx) const noexcept {
+        return reinterpret_cast<const object_*>(this)[idx];
     }
 };
 
 template <class S>
-S& operator<<(S& os, const Object& obj) {
+S& operator<<(S& os, const object_& obj) {
     os << [[>>>]] << " ";
     os.seekp(-1, std::ios_base::end);
     return os;
@@ -22,7 +22,7 @@ S& operator<<(S& os, const Object& obj) {
 
 template <class S>
 S& operator<<(S& os, const shared_& srd) {
-    for (unsigned i = 0; i != sizeof(shared_) / sizeof(Object); ++i)
+    for (unsigned i = 0; i != sizeof(shared_) / sizeof(object_); ++i)
         os << srd.get(i) << "; ";
     os.seekp(-1, std::ios_base::end);
     return os;
@@ -42,6 +42,18 @@ template <class T>
 shared_& back_get(T& log, std::size_t step) {
     return *(log.end() - step)->second;
 }
+
+template <std::size_t obj, std::size_t offset, typename T>
+class getter_ {
+    typedef types::log<std::pair<double, std::unique_ptr<shared_>>>& hist_t;
+    hist_t hist;
+public:
+    getter_(hist_t hist) : hist(hist) {}
+    T operator()(std::size_t step) {
+            return *reinterpret_cast<T*>(
+                reinterpret_cast<char*>(&back_get(hist, step).get(obj)) + offset);
+    }
+};
 
 int main() {
     types::log<std::pair<double, std::unique_ptr<shared_>>> history;

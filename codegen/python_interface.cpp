@@ -8,7 +8,6 @@
 #include "../common/python_common.hpp"
 #include "rule_types.hpp"
 #include "cNVar.hpp"
-#include <vector>
 
 PyObject* write_step(ResolvingOrder::step_base* step) {
     if (step->type() == EqnSolver::ALG_S) {

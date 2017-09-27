@@ -10,6 +10,7 @@
 #include "iter_utils.hpp"
 #include "rule_types.hpp"
 #include "../common/typed_buffer.hpp"
+#include <cassert>
 
 struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     typedef std::vector<Rule> eqn_container;
@@ -29,20 +30,24 @@ struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
         ++*selection;
         if (selection->exhausted()) {
             vars.clear();
-            ++eqn_choice;
-            for (const auto& eqn : *eqn_choice)
-                std::copy(eqn.vars.begin(), eqn.vars.end(), std::back_inserter(vars));
+            do {
+                ++eqn_choice;
+                for (const auto &eqn : *eqn_choice)
+                    std::copy(eqn.vars.begin(), eqn.vars.end(),
+                              std::back_inserter(vars));
+            } while (vars.size() < eqn_choice->size() && !eqn_choice.exhausted());
+            assert(!eqn_choice.exhausted()); // TODO: handle this
             selection->~comb_type();
             new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
         }
         return *this;
     }
-    std::pair<std::vector<std::size_t>, const std::vector<NVar>*> operator*() {
+    std::pair<std::vector<std::size_t>, const NVar*> operator*() {
         std::vector<std::size_t> ret;
         ret.reserve(eqn_choice->size());
-        for (std::size_t i = 0; i != eqn_choice->size(); ++i)
-            ret.push_back((*eqn_choice)[i].unique_id);
-        return std::make_pair(std::move(ret), &**selection);
+        for (const auto& eqn : *eqn_choice)
+            ret.push_back(eqn.unique_id);
+        return std::make_pair(std::move(ret), **selection);
     }
     bool exhausted() {
         return eqn_choice.exhausted();
@@ -76,30 +81,34 @@ bool RuleResolver::process() {
     // TODO: Independent starts selection shall be deterministic, then we can
     // even eliminate optionals.
     auto Pack = pack;
-    if (!alg_consistent())
+    if (!alg_consistent(std::vector<NVar>{}))
         return false;
     if (validate_resolution())
         return true;
     for (auto attempt : make_eqn_try(pack)) {
         unsigned step_count = 0;
-        const auto& starts = *attempt.second;
-        {
+        const NVar* starts = attempt.second;
         auto& occurrences = attempt.first;
-        if (starts.size() == 1)
-            order.add_alg(occurrences[0], *starts.begin());
-        else if (starts.size() > 1)
-            order.add_alg_sys(std::move(occurrences), starts);
-        ++step_count;
+        std::size_t size = occurrences.size();
+        if (size == 1)
+            order.add_alg(occurrences[0], *starts);
+        else {
+            assert(size != 0);
+            order.add_alg_sys(std::move(occurrences),
+                              std::vector<NVar>(starts,
+                                                starts + occurrences.size()));
         }
+        ++step_count;
         auto Pack = pack;
         // to keep consistency of the system:
         // 1. the derivatives of the same variable must all be updated. (broadcast)
         // 2. the last variable in an algebraic equation must be computed
         //    once all the other variables are known.
-        for (const auto& var : starts)
+        for (const NVar& var : iter_utils::as_array(starts, size))
             if (!broadcast(var))
                 break;
-        if (std::optional<unsigned> a_s = alg_consistent(starts))
+        if (std::optional<unsigned> a_s =
+                    alg_consistent(iter_utils::as_array(starts, size)))
             step_count += *a_s;
         if (validate_resolution())
             return true;
@@ -121,7 +130,8 @@ bool RuleResolver::broadcast(const NVar& exact) noexcept {
     return all_succeeded;
 }
 
-std::optional<unsigned> RuleResolver::alg_consistent(const std::vector<NVar>& tmp) {
+template <typename T>
+std::optional<unsigned> RuleResolver::alg_consistent(const T& tmp) {
     unsigned step_count = 0;
     // save the current state, or the state might change while updating
     std::vector<std::pair<std::size_t, NVar>> to_be_updated;
