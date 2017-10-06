@@ -1,22 +1,25 @@
 #include "../common/python_common.hpp"
 #include "rule_types.hpp"
 
-struct cNVar : PyObject {
-    NVar var;
+struct cNVar : PyObject, Variable {
+    const char* name() const {
+        return static_cast<const Variable*>(this)->name().c_str();
+    }
+    void need_update(bool flag) {
+        _need_update = flag;
+    }
+    void can_start(bool flag) {
+        _can_start = flag;
+    }
 };
 
-PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op);
-PyObject* cNVar_getattr(PyObject* self, char* attr_name);
-PyObject* cNVar_repr(PyObject* self);
-Py_hash_t cNVar_hash(PyObject* self);
 int cNVar_init(PyObject* self, PyObject* args, PyObject*);
-
 extern PyTypeObject cNVarType;
 
 template <class... T>
 PyObject* make_NVar(T&&... args) {
     cNVar* inst = static_cast<cNVar*>(cNVarType.tp_alloc(&cNVarType, 0));
-    new(&inst->var) NVar(std::forward<T>(args)...);
+    new(static_cast<Variable*>(inst)) Variable(std::forward<T>(args)...);
     return inst;
 }
 

@@ -7,10 +7,9 @@
 
 #include <utility>
 #include <algorithm>
+#include <cstddef>
 #include "iter_utils.hpp"
 #include "rule_types.hpp"
-#include "../common/typed_buffer.hpp"
-#include <cassert>
 
 struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
     typedef std::vector<Rule> eqn_container;
@@ -64,15 +63,6 @@ bool RuleResolver::validate_resolution() const noexcept {
     return true;
 }
 
-#ifndef	__cpp_deduction_guides
-template <class T>
-eqn_try<T> make_eqn_try(T b, T e, std::size_t sz) {
-    return eqn_try<T>(b, e, sz);
-}
-#else
-#define make_eqn_try eqn_try
-#endif
-
 ResolvingOrder RuleResolver::get() {
     return std::move(order);
 }
@@ -120,7 +110,7 @@ bool RuleResolver::process() {
     return false;
 }
 
-bool RuleResolver::broadcast(const NVar& exact) noexcept {
+bool RuleResolver::broadcast(const Variable& exact) noexcept {
     bool all_succeeded = true; // do as much as possible, don't fast fail.
     for (Rule& eqn : pack)
         for (const NVar& var : eqn.vars)
@@ -130,8 +120,7 @@ bool RuleResolver::broadcast(const NVar& exact) noexcept {
     return all_succeeded;
 }
 
-template <typename T>
-std::optional<unsigned> RuleResolver::alg_consistent(const T& tmp) {
+std::optional<unsigned> RuleResolver::alg_consistent() {
     unsigned step_count = 0;
     // save the current state, or the state might change while updating
     std::vector<std::pair<std::size_t, NVar>> to_be_updated;

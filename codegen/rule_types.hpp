@@ -8,66 +8,58 @@
 #ifndef RULE_TYPES_HPP
 #define RULE_TYPES_HPP
 #include <string>
-#include <cstdint>
+#include <cstddef>
 #include <vector>
 #include <array>
 #include <optional>
 #include "set_support.hpp"
 
-enum class EqnSolver {
-    ALG_S,
-    ALG_M,
-    DIFF_S
-};
-
-struct NVar {
-    typedef std::string variable_type;
-    variable_type name;
-    std::array<std::uint8_t, 8> order;
+class Variable {
+protected: // Python-side may modify these fields, by inheriting
+    std::string _name;
+    std::array<std::uint8_t, 8> _order;
     // This field shall be std::vector<std::size_t>, but that'll be used so rarely.
-    NVar() {}
-    NVar(std::string name, std::uint8_t order)
-        : name(name), order{order} {}
-    bool operator==(const NVar& rhs) const {
-        return name == rhs.name && order == rhs.order;
+    bool _can_start = false, _need_update = true;
+public:
+    bool updated = false;
+    bool as_start = false;
+    Variable(std::string name, std::uint8_t order)
+        : _name(std::move(name)), _order{order} {}
+    bool operator==(const Variable& rhs) const {
+        return _name == rhs._name && _order == rhs._order;
     }
-    struct Less {
-        bool operator()(const NVar& self, const NVar& rhs) const {
-            if (self.name == rhs.name)
-                return self.order > rhs.order;
-            else
-                return self.name < rhs.name;
-        }
-    };
+    const std::string& name() const noexcept {
+        return _name;
+    }
+    const std::array<std::uint8_t, 8>& order() const noexcept {
+        return _order;
+    }
+    bool can_start() {
+        return _can_start;
+    }
+    bool need_update() {
+        return _need_update;
+    }
 };
-std::size_t hash_value(const NVar&);
+std::size_t hash_value(const Variable&);
 
-struct Rule {
-    std::size_t unique_id;
-    CSF_set<NVar> vars;
-    CSF_set<NVar> unknowns;
-    Rule(){}
-    Rule(std::size_t id, CSF_set<NVar> vars)
-        : unique_id(id), vars(std::move(vars)), unknowns(this->vars) {}
-};
+using Rule = std::vector<Variable*>;
 
 struct ResolvingOrder {
     class step_base {
         public:
-            virtual EqnSolver type() const = 0;
-            // HACK: we can't return reference here...
-            virtual const std::vector<NVar> updates() const = 0;
+            virtual bool type() const = 0;
             virtual ~step_base() {}
     };
-    template <EqnSolver type> class step;
+    template <bool multiple> class step;
     std::vector<std::unique_ptr<step_base>> seq;
     ResolvingOrder() {}
     ResolvingOrder(ResolvingOrder&&) = default;
     ResolvingOrder& operator=(ResolvingOrder&&) = default;
-    void add_alg(std::size_t, NVar);
-    void add_alg_sys(std::vector<std::size_t>, std::vector<NVar>);
-    void remove(std::size_t idx) noexcept {
-        seq.resize(seq.size() - idx);
+    void add_alg(Rule*, Variable);
+    void add_alg_sys(Rule*, Rule*, std::vector<Variable>);
+    void resize(std::size_t sz) noexcept {
+        seq.resize(sz);
     }
     void clear() noexcept {
         seq.clear();
@@ -78,54 +70,50 @@ struct ResolvingOrder {
 };
 
 template <>
-class ResolvingOrder::step<EqnSolver::ALG_S> : public ResolvingOrder::step_base {
+class ResolvingOrder::step<false> : public ResolvingOrder::step_base {
 public:
-    std::size_t rule_id;
-    NVar solve_for;
-    step(std::size_t id, NVar solve_for)
+    Rule* rule_id;
+    Variable solve_for;
+    step(Rule* id, Variable solve_for)
         : rule_id(id), solve_for(std::move(solve_for)) {}
-    const std::vector<NVar> updates() const override {
-        return std::vector<NVar>{solve_for};
-    }
-    EqnSolver type() const override {
-        return EqnSolver::ALG_S;
+    bool type() const override {
+        return false;
     }
 };
 
 template <>
-class ResolvingOrder::step<EqnSolver::ALG_M> : public ResolvingOrder::step_base {
+class ResolvingOrder::step<true> : public ResolvingOrder::step_base {
 public:
-    std::vector<std::size_t> rules;
-    std::vector<NVar> solve_for;
-    step(std::vector<std::size_t> rules, std::vector<NVar> solve_for)
-        : rules(std::move(rules)), solve_for(std::move(solve_for)) {}
-    const std::vector<NVar> updates() const override {
-        return solve_for;
-    }
-    EqnSolver type() const override {
-        return EqnSolver::ALG_M;
+    Rule* rule_begin_id, *rule_end_id;
+    std::vector<Variable> solve_for;
+    step(Rule* begin, Rule* end, std::vector<Variable> solve_for)
+        : rule_begin_id(begin), rule_end_id(end), solve_for(std::move(solve_for)) {}
+    bool type() const override {
+        return false;
     }
 };
 
-struct RuleResolver {
+class RuleResolver {
 private:
-    std::vector<Rule> pack;
-    const CSF_set<NVar>& knowns;
-    CSF_set<NVar> cycle;
+    // std::vector<std::unique_ptr<Variable>> vars;
+    std::vector<Variable*>& vars;
+    std::vector<Rule>& pack;
     ResolvingOrder order;
 public:
-    RuleResolver(std::vector<Rule> pack, const CSF_set<NVar>& knowns)
-        : pack(std::move(pack)), knowns(knowns) {}
+    RuleResolver(std::vector<Variable*>& vars, std::vector<Rule>& pack)
+            noexcept : vars(vars), pack(pack) {}
     ResolvingOrder get();
     bool process();
 private:
-    /// The function may fail, and returns empty optionals on fail.
-    /// use tmp to address variables that are marked solved but shall not be considered in alg_consistent
-    /// e.g. starting equation since they are unconditionally solved but require cycle update.
-    template <typename T>
-    std::optional<unsigned> alg_consistent(const T& tmp);
+    bool try_step();
+    /// The function may fail, and return false on fail.
+    bool alg_consistent();
+    enum : int { // return value enum
+        BROADCAST_SUCCEED_AND_UPDATED,
+        BROADCAST_SUCCEED_NONE_UPDATED,
+        BROADCAST_FAILED
+    };
     /// The function may fail, and returns false on fail.
-    bool broadcast(const NVar&) noexcept;
-    bool validate_resolution() const noexcept;
+    int broadcast(const Variable&, bool update_start = false) noexcept;
 };
 #endif

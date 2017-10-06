@@ -30,40 +30,23 @@ class Flag:
         return self.flag
 
 
-class RuleType:
-    def __init__(self, src, dom, rule):
+class CondRuleType:
+    # This has the same interface as RuleType, should have an abstract base
+    def __init__(self, src, dom, *condrulepair):
         self.src = src
-        self.domain = dom
-        self.rule = Expr(expr.stringToExpr(rule[0])), Expr(
-            expr.stringToExpr(rule[1]))
-        self.diffs = set(
-            chain(self.rule[0].findDerivatives(),
-                  self.rule[1].findDerivatives()))
+        self.dom = dom
+        self.crpack = condrulepair
+        self.diffs = {rule[0].findDerivatives() for _, rule in condrulepair}
+        self.diffs.update(rule[1].findDerivatives() for _, rule in condrulepair)
 
     def list_vars(self):
-        return chain(self.rules[0].listVars(), self.rules[1].listVars())
-
-    def __repr__(self):
-        return f'Rule at {self.src}: {self.rule}'
+        return {i.name for i in self.diffs}
 
 
 class ObjType:
-    def __init__(self, src, obj, vals):
+    def __init__(self, src, vals):
         self.src = src
-        self.name = obj
         self.vals = vals
-
-    def getWatch(self, watch):
-        return writers.WatchWriter(watch)
-
-    def writer(self):
-        return self
-
-    def write(self):
-        return f'object {self.name} {self.vals};'
-
-    def __repr__(self):
-        return f'Object at {self.src}: {self.vals}'
 
 
 class DeclType:
@@ -89,7 +72,11 @@ def diff_writer(args, default_writer: 'StepWriter'):
     all_vars = set(resolver.cNVar(i.name, i.order[0]+1) for i in expr.findDerivatives())
     solving = {var for var in default_writer.state[-1] if var in all_vars}
     if not solving:
-        return f'math::calculus::fdiff({default_writer.write_lambda("&", "double t", "return " + default_writer.write_expr(expr) + ";")}, t)'
+        varlist = list(expr.listVars())
+        with default_writer.VarWriter.tmp_override({i:default_writer.write_arg(i) for i in varlist}):
+            return 'math::calculus::fdiff(' \
+               + default_writer.write_lambda("&", varlist, "return " + default_writer.write_expr(expr) + ";") \
+               + ", step, " + ", ".join(default_writer.write_getter(i) for i in varlist) + ')'
     else:
         # When using chain-rule we have to adjust writing scheme for base
         # variables as well
@@ -146,13 +133,6 @@ class Expr:
         return repr(self.content)
 
 
-def resolve(offset, rules, unknowns):
-    for i in rules:
-        i.diffs.intersection_update(unknowns)
-    steps = resolver.resolve(rules, unknowns)
-    return [(offset + i, j) for i, j in steps]
-
-
 class StepWriter:
     def __init__(self, space: 'Space'):
         self.space = space
@@ -176,8 +156,11 @@ class StepWriter:
             else:
                 bind = f'{self.VarWriter.write(update)} = '
                 end = ';'
-            return bind + self.write_alg(
-                self.write_lambda('&',
+            if update.order[0] == 0:
+                update = update.name
+            with self.VarWriter.tmp_override({update: self.write_arg(update)}):
+                return bind + self.write_alg(
+                    self.write_lambda('&',
                                   [update],
                                   f'return {self.write_rule(self.space.rules[use])};'),
                                   self.VarWriter.write_value(update)) + end
@@ -195,17 +178,27 @@ class StepWriter:
                     self.write_lambda('&', ['t', update_intermediate], f'return {self.write(use)};'),
                     't', self.VarWriter.write_value(update),
                     'step') + '.first' + end
+        else:
+            bind = ''
+            end = '' if self.noBind else ';'
+            return bind + self.write_alg_sys(', '.join(self.VarWriter.write(i) for i in update),
+                                             ', '.join(self.space.rules[i] for i in use),
+                                             ) + end
 
     @staticmethod
     def write_alg(rule, seed):
         return f'math::solver::algebraic({rule}, {seed})'
 
     @staticmethod
+    def write_alg_sys(vars, rules):
+        return f'math::solver::algebraic_sys({{{vars}}}, {rules})'
+
+    @staticmethod
     def write_diff(gen, wrt, seed, step):
         return f'math::solver::differential({gen}, {wrt}, {seed}, {step})'
 
-    def write_rule(self, rule: RuleType):
-        return f'math::op::sub({self.write_expr(rule.rule[0])}, {self.write_expr(rule.rule[1])})'
+    def write_rule(self, rule):
+        return f'math::op::sub({self.write_expr(rule.lhs)}, {self.write_expr(rule.rhs)})'
 
     def write_expr(self, expr):
         if isinstance(expr, Expr):
@@ -294,6 +287,13 @@ class StepWriter:
     def write_arg(self, var):
         return self._write_arg(var).split(' ', 1)[1]
 
+    def write_getter(self, var):
+        """write a functor that can get all history values of watch of a specific object"""
+        lookup_result = self.space.locate_var(var)
+        assert isinstance(lookup_result, tuple)
+        offset = f'offsetof(object_, {lookup_result[1]})'
+        return f'getter_<{lookup_result[0]}, {offset}, {lookup_result[2]}>(history)';
+
     def __iter__(self):
         for step in self.space.steps:
             yield self.write(step)
@@ -313,13 +313,13 @@ class Space:
 
     def addRule(self, rule, dom=None, src=None):
         self.rules.append(
-            RuleType(src if src else src_tracker(0, 0), dom, rule))
+            resolver.cRule(src if src else src_tracker(0, 0), dom, rule[0], rule[1]))
 
     def addObj(self, obj, vals, src=None):
         if obj in self.objs:
             if not warning.warn_ask(f'Object named {obj} exists, continue?'):
                 return
-        self.objs[obj] = ObjType(src if src else src_tracker(0, 0), obj, vals)
+        self.objs[obj] = ObjType(src if src else src_tracker(0, 0), vals)
 
     def addTmp(self, var, types, src=None):
         self.tmps[var] = DeclType(src, types)
@@ -337,25 +337,20 @@ class Space:
 
         #TODO: Check consistency of boundary values first
 
-        def available(NVar):
-            if sum(NVar.order):
-                return False
+        def is_known(NVar):
+            return True # FIXME
+
+        def need_update(NVar):
             v = self.locate_var(NVar.name)
-            return not isinstance(v, ObjType)
-        # WE ASSUMED THAT UPDATING A VARIABLE TWICE IN A CYCLE IS ILLEGAL
-        self.steps = []
-        idx = 0
-        while idx < len(self.rules):
-            eqn_count = 0
-            needMore = True
-            all_vars = set()
-            while needMore:
-                eqn_count += 1
-                all_vars.update(self.rules[idx + eqn_count - 1].diffs)
-                unknowns = {var for var in all_vars if not available(var)}
-                needMore = len({i.name for i in unknowns}) > eqn_count
-            self.steps += resolve(idx, self.rules[idx:idx + eqn_count], unknowns)
-            idx += eqn_count
+            return isinstance(v, tuple) # FIXME
+
+        def list_der(x):
+            for i in Expr(expr.stringToExpr(x)).findDerivatives():
+                i.can_start = is_known(i)
+                i.need_update = need_update(i)
+                yield i
+
+        self.steps = resolver.resolve(self.rules, list_der)
 
         # propagate updates here
         updated = {}

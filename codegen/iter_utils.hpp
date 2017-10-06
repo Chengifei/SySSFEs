@@ -12,23 +12,23 @@ struct None {};
 template <class BI>
 struct hack_iterator {
     BI& base_iterator;
-  	explicit hack_iterator(BI& bi) : base_iterator(bi) {}
-	bool operator!=(None) const {
-  		return !base_iterator.exhausted();
-	}
-  	void operator++() {
-    	++base_iterator;
+    explicit hack_iterator(BI& bi) : base_iterator(bi) {}
+    bool operator!=(None) const {
+        return !base_iterator.exhausted();
     }
-  	decltype(auto) operator*() {
-      	return *base_iterator;
+    void operator++() {
+        ++base_iterator;
+    }
+    decltype(auto) operator*() {
+        return *base_iterator;
     }
 };
 
 template <class T>
 class non_trivial_end_iter {
 public:
-  	hack_iterator<T> begin() {
-      	return hack_iterator<T>(*static_cast<T*>(this));
+    hack_iterator<T> begin() {
+        return hack_iterator<T>(*static_cast<T*>(this));
     }
     None end() {
         return None();
@@ -76,25 +76,26 @@ public:
 
 template <class T>
 struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
-    typedef typename T::value_type value_type;
+    typedef typename std::iterator_traits<T>::value_type value_type;
     const std::size_t num_in_pool;
     std::unique_ptr<value_type[]> pool;
     std::unique_ptr<std::size_t[]> indices;
     /* const */ std::size_t* indices_end;
     std::unique_ptr<value_type[]> result;
     std::size_t* cursor;
-    combination(T begin, T end, std::size_t sz): num_in_pool(end - begin) {
+    combination(T begin, T end, std::size_t sz)
+            : num_in_pool(std::distance(begin, end)) {
         result = std::make_unique<value_type[]>(sz);
         indices = std::make_unique<std::size_t[]>(sz);
         for (auto i : range<std::size_t>(0, sz)) {
             indices[i] = i;
-            result[i] = std::move(begin[i]);
+            result[i] = std::move(*(begin++));
         }
         indices_end = indices.get() + sz;
         cursor = indices_end - 1;
         pool = std::make_unique<value_type[]>(num_in_pool);
         for (auto i : range<std::size_t>(sz, num_in_pool))
-            pool[i] = std::move(begin[i]);
+            pool[i] = std::move(*(begin++));
     }
     combination& operator++() {
         while (*cursor + (indices_end - cursor) == num_in_pool) {
@@ -104,6 +105,8 @@ struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
                 return *this;
             }
         }
+        for (std::size_t* ptr = cursor; ptr != indices_end; ++ptr)
+            pool[*ptr] = std::move(result[ptr - indices.get()]);
         ++*cursor;
         result[cursor - indices.get()] = std::move(pool[*cursor]);
         for (++cursor; cursor != indices_end; ++cursor) {
@@ -113,11 +116,11 @@ struct combination : iter_utils::non_trivial_end_iter<combination<T>> {
         --cursor;
         return *this;
     }
-  	bool exhausted() {
-      	return static_cast<bool>(result);
+    bool exhausted() {
+        return !static_cast<bool>(result);
     }
-  	const value_type* operator*() {
-      	return result.get();
+    const value_type* operator*() {
+        return result.get();
     }
 };
 
@@ -157,14 +160,14 @@ struct powerset : iter_utils::non_trivial_end_iter<powerset<T>> {
         idx = result.size() - 1;
         return *this;
     }
-  	bool exhausted() {
-      	return result.empty();
+    bool exhausted() {
+        return result.empty();
     }
-  	std::vector<value_type>& operator*() {
-      	return result;
+    std::vector<value_type>& operator*() {
+        return result;
     }
-  	std::vector<value_type>* operator->() {
-      	return &result;
+    std::vector<value_type>* operator->() {
+        return &result;
     }
     const std::size_t* raw() const noexcept {
         return indices.get();
@@ -192,12 +195,12 @@ struct product : iter_utils::non_trivial_end_iter<product<TIT, UIT>> {
     TIT begin1, it1, end1;
     UIT begin2, it2, end2;
     product(TIT begin1, TIT end1, UIT begin2, UIT end2) 
-    	: begin1(begin1), it1(begin1), end1(end1), begin2(begin2), it2(begin2), end2(end2) {}
+        : begin1(begin1), it1(begin1), end1(end1), begin2(begin2), it2(begin2), end2(end2) {}
     product& operator++() {
-    	if (it1 != end1)
-        	++it1;
+        if (it1 != end1)
+             ++it1;
         if (it1 == end1) {
-        	++it2;
+            ++it2;
             it1 = begin1;
         }
         return *this;
@@ -206,7 +209,7 @@ struct product : iter_utils::non_trivial_end_iter<product<TIT, UIT>> {
         return std::make_pair(*it1, *it2);
     }
     bool exhausted() const {
-    	return it2 == end2;
+        return it2 == end2;
     }
 };
 #endif

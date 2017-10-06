@@ -6,6 +6,7 @@
  */
 #include "../common/python_common.hpp"
 #include "cNVar.hpp"
+#include "cRule.hpp"
 
 PyObject* resolve(PyObject*, PyObject* args);
 
@@ -32,6 +33,9 @@ PyInit_resolver() {
     PyOnly(PyType_Ready(&cNVarType), 0);
     Py_INCREF(&cNVarType);
     PyModule_AddObject(m, "cNVar", reinterpret_cast<PyObject*>(&cNVarType));
+    PyOnly(PyType_Ready(&cRuleType), 0);
+    Py_INCREF(&cRuleType);
+    PyModule_AddObject(m, "cRule", reinterpret_cast<PyObject*>(&cRuleType));
     PyModule_AddFunctions(m, ResolverMethods);
     return m;
 }

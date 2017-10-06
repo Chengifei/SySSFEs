@@ -1,20 +1,25 @@
 #include "cNVar.hpp"
 
+inline Variable& get_var(PyObject* o) {
+    return *static_cast<Variable*>(static_cast<cNVar*>(o));
+}
+
 PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
     switch (op) {
         case Py_EQ:
-            return PyBool_FromLong(static_cast<cNVar*>(self)->var == static_cast<cNVar*>(rhs)->var);
+            return PyBool_FromLong(get_var(self) == get_var(self));
     }
     return Py_NotImplemented;
 }
 
-PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
+PyObject* cNVar_getattro(PyObject* self, PyObject* attro) {
+    const char* attr_name = PyExc(PyUnicode_AsUTF8(attro), nullptr);
     if (strcmp(attr_name, "name") == 0)
-        return PyUnicode_FromString(static_cast<cNVar*>(self)->var.name.c_str());
+        return PyUnicode_FromString(static_cast<cNVar*>(self)->name());
     else if (strcmp(attr_name, "order") == 0) {
         PyObject* L = PyList_New(8);
         for (std::size_t i = 0; i != 8; ++i)
-            PyList_SET_ITEM(L, i, PyLong_FromLong(static_cast<cNVar*>(self)->var.order[i]));
+            PyList_SET_ITEM(L, i, PyLong_FromLong(static_cast<cNVar*>(self)->order()[i]));
         return L;
     }
     PyErr_Format(PyExc_AttributeError,
@@ -22,14 +27,26 @@ PyObject* cNVar_getattr(PyObject* self, char* attr_name) {
     return nullptr;
 }
 
+int cNVar_setattro(PyObject* self, PyObject* attro, PyObject* val) {
+    const char* attr_name = PyExc(PyUnicode_AsUTF8(attro), nullptr);
+    if (strcmp(attr_name, "need_update") == 0) {
+        static_cast<cNVar*>(self)->need_update(PyObject_IsTrue(val));
+        return 0;
+    }
+    else if (strcmp(attr_name, "can_start") == 0) {
+        static_cast<cNVar*>(self)->can_start(PyObject_IsTrue(val));
+        return 0;
+    }
+    return -1;
+}
+
 PyObject* cNVar_repr(PyObject* self) {
-    cNVar& var = *static_cast<cNVar*>(self);
-    return PyUnicode_FromFormat("%s(%zu)", var.var.name.c_str(), var.var.order);
+    return PyUnicode_FromFormat("%s(%zu)", 
+            static_cast<cNVar*>(self)->name(), static_cast<cNVar*>(self)->order());
 }
 
 Py_hash_t cNVar_hash(PyObject* self) {
-    cNVar& var = *static_cast<cNVar*>(self);
-    return hash_value(var.var);
+    return hash_value(get_var(self));
 }
 
 int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
@@ -37,7 +54,7 @@ int cNVar_init(PyObject* self, PyObject* args, PyObject*) {
     unsigned order;
     if (!PyArg_ParseTuple(args, "sI", &name, &order))
         return -1;
-    new(&(static_cast<cNVar*>(self)->var)) NVar(name, order);
+    new(&get_var(self)) Variable(name, order);
     return 0;
 }
 
@@ -48,7 +65,7 @@ PyTypeObject cNVarType {
     0,                         /* tp_itemsize */
     call_destructor<cNVar>,    /* tp_dealloc */
     0,                         /* tp_print */
-    cNVar_getattr,             /* tp_getattr */
+    0,                         /* tp_getattr */
     0,                         /* tp_setattr */
     0,                         /* tp_reserved */
     cNVar_repr,                /* tp_repr */
@@ -58,8 +75,8 @@ PyTypeObject cNVarType {
     cNVar_hash,                /* tp_hash  */
     0,                         /* tp_call */
     0,                         /* tp_str */
-    0,                         /* tp_getattro */
-    0,                         /* tp_setattro */
+    cNVar_getattro,            /* tp_getattro */
+    cNVar_setattro,            /* tp_setattro */
     0,                         /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,        /* tp_flags */
     0,                         /* tp_doc */
