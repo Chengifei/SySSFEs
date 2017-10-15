@@ -40,7 +40,7 @@ struct as_array {
     typedef typename std::remove_pointer<T>::type ref_type;
     T _begin;
     T _end;
-    as_array(T begin, std::size_t sz) : _begin(begin), _end(begin + sz) {};
+    as_array(std::pair<T, T> p) : _begin(p.first), _end(p.second) {};
     ref_type operator[](int idx) const {
         return *(_begin + idx);
     }
