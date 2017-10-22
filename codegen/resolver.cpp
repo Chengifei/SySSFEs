@@ -11,132 +11,163 @@
 #include "iter_utils.hpp"
 #include "rule_types.hpp"
 
-struct eqn_try : iter_utils::non_trivial_end_iter<eqn_try> {
-    typedef std::vector<Rule> eqn_container;
-    typedef std::vector<NVar> var_container;
-    typedef var_container::iterator var_iter;
-    typedef combination<var_iter> comb_type;
-    powerset<eqn_container> eqn_choice;
-    var_container vars;
-    placeholder<comb_type> selection;
-    eqn_try(eqn_container& pack)
-        : eqn_choice(pack, pack.size()) {
-        for (const auto& eqn : *eqn_choice)
-            std::copy(eqn.vars.begin(), eqn.vars.end(), std::back_inserter(vars));
-        new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
-    }
-    eqn_try& operator++() {
-        ++*selection;
-        if (selection->exhausted()) {
-            vars.clear();
-            do {
-                ++eqn_choice;
-                for (const auto &eqn : *eqn_choice)
-                    std::copy(eqn.vars.begin(), eqn.vars.end(),
-                              std::back_inserter(vars));
-            } while (vars.size() < eqn_choice->size() && !eqn_choice.exhausted());
-            assert(!eqn_choice.exhausted()); // TODO: handle this
-            selection->~comb_type();
-            new(&selection) comb_type(vars.begin(), vars.end(), eqn_choice->size());
-        }
-        return *this;
-    }
-    std::pair<std::vector<std::size_t>, const NVar*> operator*() {
-        std::vector<std::size_t> ret;
-        ret.reserve(eqn_choice->size());
-        for (const auto& eqn : *eqn_choice)
-            ret.push_back(eqn.unique_id);
-        return std::make_pair(std::move(ret), **selection);
-    }
-    bool exhausted() {
-        return eqn_choice.exhausted();
-    }
-    ~eqn_try() {
-        selection->~comb_type();
-    }
-};
-
-bool RuleResolver::validate_resolution() const noexcept {
-    for (const Rule& eqn : pack)
-        if (!eqn.unknowns.empty())
-            return false;
-    return true;
-}
-
 ResolvingOrder RuleResolver::get() {
     return std::move(order);
 }
 
-bool RuleResolver::process() {
-    // TODO: Independent starts selection shall be deterministic, then we can
-    // even eliminate optionals.
-    auto Pack = pack;
-    if (!alg_consistent(std::vector<NVar>{}))
-        return false;
-    if (validate_resolution())
-        return true;
-    for (auto attempt : make_eqn_try(pack)) {
-        unsigned step_count = 0;
-        const NVar* starts = attempt.second;
-        auto& occurrences = attempt.first;
-        std::size_t size = occurrences.size();
-        if (size == 1)
-            order.add_alg(occurrences[0], *starts);
-        else {
-            assert(size != 0);
-            order.add_alg_sys(std::move(occurrences),
-                              std::vector<NVar>(starts,
-                                                starts + occurrences.size()));
+template <typename T>
+struct VarStateDumper {
+    T b, e;
+    std::vector<char> update_states;
+    std::vector<char> start_states;
+    VarStateDumper(T b, T e): b(b), e(e) {
+        std::size_t sz = std::distance(b, e);
+        update_states.reserve(sz);
+        start_states.reserve(sz);
+        for (; b != e; ++b) {
+            update_states.push_back((*b)->updated);
+            start_states.push_back((*b)->as_start);
         }
-        ++step_count;
-        auto Pack = pack;
-        // to keep consistency of the system:
-        // 1. the derivatives of the same variable must all be updated. (broadcast)
-        // 2. the last variable in an algebraic equation must be computed
-        //    once all the other variables are known.
-        for (const NVar& var : iter_utils::as_array(starts, size))
-            if (!broadcast(var))
-                break;
-        if (std::optional<unsigned> a_s =
-                    alg_consistent(iter_utils::as_array(starts, size)))
-            step_count += *a_s;
-        if (validate_resolution())
+    }
+    void release() noexcept {
+        b = e;
+    }
+    ~VarStateDumper() {
+        for (std::size_t i = 0; b != e; ++i, ++b) {
+            (*b)->updated = update_states[i];
+            (*b)->as_start = start_states[i];
+        }
+    }
+};
+
+struct ResolvingOrderDumper {
+    ResolvingOrder& o;
+    std::size_t sz;
+    ResolvingOrderDumper(ResolvingOrder& o): o(o), sz(o.size()) {}
+    void release() noexcept {
+        sz = o.size();
+    }
+    ~ResolvingOrderDumper() {
+        o.resize(sz);
+    }
+};
+
+struct start_selection : iter_utils::non_trivial_end_iter<start_selection> {
+    typedef std::vector<Variable*>::iterator iterator;
+    iterator _begin;
+    const iterator _end;
+    iterator cur = _begin;
+    start_selection(iterator begin, iterator end) :
+        _begin(begin), _end(end) {
+        (*cur++)->as_start = true;
+    }
+    void operator++(){
+        if (cur == _end) {
+            for (iterator it = _begin; it != cur; ++it)
+                (*it)->as_start=false;
+            ++_begin;
+            (*_begin)->as_start = true;
+        }
+        else
+            (*cur++)->as_start = true;
+    }
+    bool exhausted() const {
+        return _begin == _end - 1 && cur == _end;
+    }
+    std::pair<iterator, iterator> operator*() const {
+        return {_begin, cur};
+    }
+};
+
+template <typename T>
+T get_next_start(T end, T ptr) noexcept {
+    ++ptr;
+    while (ptr != end && (!(*ptr)->can_start() || (*ptr)->as_start))
+        ++ptr;
+    return ptr;
+}
+
+
+bool RuleResolver::try_step() {
+    // to keep the system consistent:
+    // 1. the derivatives of the same variable must all be updated. (broadcast)
+    // 2. the last variable in an algebraic equation must be computed
+    //    once all the other variables are known.
+    // Choose starts ...
+    for (auto _ : start_selection(vars.begin(), vars.end())) {
+        VarStateDumper<std::vector<Variable*>::iterator> _v(vars.begin(), vars.end());
+        ResolvingOrderDumper _o(order);
+        for (Variable* var : iter_utils::as_array(_))
+            // not broadcasting becuase we select starts only for alg eqns.
+            if (!alg_consistent())
+                goto fail;
+        // Check if all variables are solved
+        if (std::all_of(vars.begin(), vars.end(),
+                        [](Variable* v) {return !v->need_update() || v->updated;})) {
+            _v.release();
+            _o.release();
             return true;
-        else {
-            pack = std::move(Pack);
-            order.clear();
         }
+    fail:;
     }
     return false;
 }
 
-bool RuleResolver::broadcast(const Variable& exact) noexcept {
-    bool all_succeeded = true; // do as much as possible, don't fast fail.
-    for (Rule& eqn : pack)
-        for (const NVar& var : eqn.vars)
-            if (var.name == exact.name)
-                if (!verify_then_remove(eqn.unknowns, var))
-                    all_succeeded = false;
-    return all_succeeded;
+
+bool RuleResolver::process() {
+    // THIS NOT ONLY CHECKS FOR CONSISTENCY, BUT ALSO UPDATES THE SYSTEM
+    if (!alg_consistent())
+        return false;
+    if (std::all_of(vars.begin(), vars.end(), 
+                    [](Variable* v) {return !v->need_update() || v->updated;}))
+        return true;
+    return try_step();
 }
 
-std::optional<unsigned> RuleResolver::alg_consistent() {
-    unsigned step_count = 0;
-    // save the current state, or the state might change while updating
-    std::vector<std::pair<std::size_t, NVar>> to_be_updated;
-    for (const auto& rule : pack) {
-        if (rule.unknowns.size() + intersect_sets(rule.vars, tmp).size() == 1)
-            to_be_updated.emplace_back(rule.unique_id, *rule.unknowns.cbegin());
-    }
-    for (const auto& rule : to_be_updated) {
-        // recurse for the further variables
-        if (!broadcast(rule.second)) {
-            if (!verify_then_insert(cycle, rule.second))
-                 return std::optional<unsigned>();
+int RuleResolver::broadcast(const Variable& exact, bool lenient_start) noexcept {
+    // do as much as possible, because when broadcasting overlaps with start,
+    // it always fails but we're done in that case.
+    bool updated = false;
+    for (Variable* var : vars)
+        if (var->name() == exact.name()) {
+            if (var->updated && !lenient_start)
+                return BROADCAST_FAILED;
+            else {
+                updated = true;
+                var->updated = true;
+            }
         }
+    return updated ? BROADCAST_SUCCEED_AND_UPDATED : BROADCAST_SUCCEED_NONE_UPDATED;
+}
+
+bool RuleResolver::alg_consistent(bool update_start) {
+    // save the current state, or the state might change while updating
+    std::vector<std::pair<Rule*, Variable*>> to_be_updated;
+    for (auto& rule : pack) {
+        Variable* unknown = nullptr;
+        for (auto var : rule) {
+            if (var->need_update() && !var->updated && (update_start || !var->as_start)) {
+                if (unknown)
+                    goto next_rule;
+                unknown = var;
+            }
+        }
+        if (unknown)
+            to_be_updated.emplace_back(&rule, unknown);
+next_rule:;
     }
+    bool recurse = false;
+    for (const auto& update : to_be_updated) {
+        // recurse for the further variables
+        if (int ret = broadcast(*update.second, update_start); ret == BROADCAST_FAILED)
+             return false;
+        else if (ret == BROADCAST_SUCCEED_AND_UPDATED)
+             recurse = true;
+    }
+    if (recurse)
+        if (!alg_consistent(true))
+            return false;
     for (const auto& rule : to_be_updated)
-        order.add_alg(rule.first, rule.second);
-    step_count += to_be_updated.size();
-    return std::optional<unsigned>(step_count);
+        order.add_alg(rule.first, *rule.second);
+    return true;
 }

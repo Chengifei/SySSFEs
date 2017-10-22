@@ -107,13 +107,13 @@ public:
 private:
     bool try_step();
     /// The function may fail, and return false on fail.
-    bool alg_consistent();
+    bool alg_consistent(bool update_start = false);
     enum : int { // return value enum
         BROADCAST_SUCCEED_AND_UPDATED,
         BROADCAST_SUCCEED_NONE_UPDATED,
         BROADCAST_FAILED
     };
     /// The function may fail, and returns false on fail.
-    int broadcast(const Variable&, bool update_start = false) noexcept;
+    int broadcast(const Variable&, bool lenient_start = false) noexcept;
 };
 #endif

@@ -35,25 +35,27 @@ public:
     }
 };
 
-template <class T>
-struct as_array {
-    typedef typename std::remove_pointer<T>::type ref_type;
-    T _begin;
-    T _end;
-    as_array(std::pair<T, T> p) : _begin(p.first), _end(p.second) {};
-    ref_type operator[](int idx) const {
-        return *(_begin + idx);
-    }
-    std::size_t size() const {
-        return _end - _begin;
-    }
-    T begin() const {
-        return _begin;
-    }
-    T end() const {
-        return _end;
-    }
-};
+template <typename T>
+auto as_array(std::pair<T, T> p) {
+    struct _as_array {
+        typedef decltype(*std::declval<T>()) ref_type;
+        T _begin;
+        T _end;
+        ref_type operator[](int idx) const {
+            return *(_begin + idx);
+        }
+        std::size_t size() const {
+            return _end - _begin;
+        }
+        T begin() const {
+            return _begin;
+        }
+        T end() const {
+            return _end;
+        }
+    };
+    return _as_array{p.first, p.second};
+}
 
 }
 
