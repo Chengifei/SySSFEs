@@ -58,9 +58,7 @@ struct start_selection : iter_utils::non_trivial_end_iter<start_selection> {
     const iterator _end;
     iterator cur = _begin;
     start_selection(iterator begin, iterator end) :
-        _begin(begin), _end(end) {
-        (*cur++)->as_start = true;
-    }
+        _begin(begin), _end(end) {}
     void operator++(){
         if (cur == _end) {
             for (iterator it = _begin; it != cur; ++it)
@@ -79,16 +77,7 @@ struct start_selection : iter_utils::non_trivial_end_iter<start_selection> {
     }
 };
 
-template <typename T>
-T get_next_start(T end, T ptr) noexcept {
-    ++ptr;
-    while (ptr != end && (!(*ptr)->can_start() || (*ptr)->as_start))
-        ++ptr;
-    return ptr;
-}
-
-
-bool RuleResolver::try_step() {
+bool RuleResolver::process() {
     // to keep the system consistent:
     // 1. the derivatives of the same variable must all be updated. (broadcast)
     // 2. the last variable in an algebraic equation must be computed
@@ -97,13 +86,12 @@ bool RuleResolver::try_step() {
     for (auto _ : start_selection(vars.begin(), vars.end())) {
         VarStateDumper<std::vector<Variable*>::iterator> _v(vars.begin(), vars.end());
         ResolvingOrderDumper _o(order);
-        for (Variable* var : iter_utils::as_array(_))
-            // not broadcasting becuase we select starts only for alg eqns.
-            if (!alg_consistent())
-                goto fail;
+        // not broadcasting becuase we select starts only for alg eqns.
+        if (!alg_consistent())
+            goto fail;
         // Check if all variables are solved
         if (std::all_of(vars.begin(), vars.end(),
-                        [](Variable* v) {return !v->need_update() || v->updated;})) {
+            [](Variable* v) {return !v->need_update() || v->updated; })) {
             _v.release();
             _o.release();
             return true;
@@ -111,17 +99,6 @@ bool RuleResolver::try_step() {
     fail:;
     }
     return false;
-}
-
-
-bool RuleResolver::process() {
-    // THIS NOT ONLY CHECKS FOR CONSISTENCY, BUT ALSO UPDATES THE SYSTEM
-    if (!alg_consistent())
-        return false;
-    if (std::all_of(vars.begin(), vars.end(), 
-                    [](Variable* v) {return !v->need_update() || v->updated;}))
-        return true;
-    return try_step();
 }
 
 int RuleResolver::broadcast(const Variable& exact, bool lenient_start) noexcept {
@@ -146,7 +123,7 @@ bool RuleResolver::alg_consistent(bool update_start) {
     for (auto& rule : pack) {
         Variable* unknown = nullptr;
         for (auto var : rule) {
-            if (var->need_update() && !var->updated && (update_start || !var->as_start)) {
+            if (var->need_update() && !var->updated && !var->as_start) {
                 if (unknown)
                     goto next_rule;
                 unknown = var;

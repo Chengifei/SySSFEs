@@ -105,7 +105,6 @@ public:
     ResolvingOrder get();
     bool process();
 private:
-    bool try_step();
     /// The function may fail, and return false on fail.
     bool alg_consistent(bool update_start = false);
     enum : int { // return value enum
@@ -113,7 +112,6 @@ private:
         BROADCAST_SUCCEED_NONE_UPDATED,
         BROADCAST_FAILED
     };
-    /// The function may fail, and returns false on fail.
     int broadcast(const Variable&, bool lenient_start = false) noexcept;
 };
 #endif
