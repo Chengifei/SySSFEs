@@ -62,7 +62,7 @@ class Op:
         self.writer = writer
 
     def __repr__(self):
-        return 'Op:' + self.name
+        return 'Op ' + self.name
 
 
 def diff_writer(args, default_writer: 'StepWriter'):
@@ -107,7 +107,7 @@ OP = {
 class Expr:
     def __init__(self, expr):
         if isinstance(expr, tuple):
-            self.content = (expr[0], [Expr(i) for i in expr[1]])
+            self.content = (OP[expr[0]], [Expr(i) for i in expr[1]])
         else:
             self.content = expr
 
@@ -120,11 +120,11 @@ class Expr:
 
     def findDerivatives(self, DIFF=0):
         if isinstance(self.content, tuple):
-            if self.content[0] == 'diff':
+            if self.content[0] is OP['diff']:
                 DIFF += 1
             for i in self.content[1]:
                 yield from i.findDerivatives(DIFF)
-            if self.content[0] == 'diff':
+            if self.content[0] is OP['diff']:
                 DIFF -= 1
         elif isinstance(self.content, str):
             yield resolver.cNVar(self.content, DIFF)
@@ -147,6 +147,13 @@ class StepWriter:
         flag.flag = a
         yield
         flag.flag = old
+
+    @contextmanager
+    def tmp_solve_for(self, L):
+        length = len(self.state)
+        self.state.extend(L)
+        yield
+        self.state = self.state[:length]
 
     def write(self, step):
         use, update = step
@@ -204,7 +211,7 @@ class StepWriter:
         if isinstance(expr, Expr):
             expr = expr.content
         if isinstance(expr, tuple):
-            op = OP[expr[0]]
+            op = expr[0]
             if op.writer:
                 return op.writer(expr[1], self)
             else:
@@ -313,7 +320,8 @@ class Space:
 
     def addRule(self, rule, dom=None, src=None):
         self.rules.append(
-            resolver.cRule(src if src else src_tracker(0, 0), dom, rule[0], rule[1]))
+            resolver.cRule(src if src else src_tracker(0, 0), dom,
+                           Expr(expr.stringToExpr(rule[0])), Expr(expr.stringToExpr(rule[1]))))
 
     def addObj(self, obj, vals, src=None):
         if obj in self.objs:
@@ -345,13 +353,12 @@ class Space:
             return isinstance(v, tuple) # FIXME
 
         def list_der(x):
-            for i in Expr(expr.stringToExpr(x)).findDerivatives():
+            for i in x.findDerivatives():
                 i.can_start = is_known(i)
                 i.need_update = need_update(i)
                 yield i
 
         self.steps = resolver.resolve(self.rules, list_der)
-
         # propagate updates here
         updated = {}
         for i, (_, var) in enumerate(self.steps):

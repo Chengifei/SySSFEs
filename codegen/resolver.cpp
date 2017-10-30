@@ -86,7 +86,7 @@ bool RuleResolver::process() {
     for (auto _ : start_selection(vars.begin(), vars.end())) {
         VarStateDumper<std::vector<Variable*>::iterator> _v(vars.begin(), vars.end());
         ResolvingOrderDumper _o(order);
-        // not broadcasting becuase we select starts only for alg eqns.
+        // not broadcasting because we select starts only for alg eqns.
         if (!alg_consistent())
             goto fail;
         // Check if all variables are solved
@@ -102,8 +102,6 @@ bool RuleResolver::process() {
 }
 
 int RuleResolver::broadcast(const Variable& exact, bool lenient_start) noexcept {
-    // do as much as possible, because when broadcasting overlaps with start,
-    // it always fails but we're done in that case.
     bool updated = false;
     for (Variable* var : vars)
         if (var->name() == exact.name()) {
