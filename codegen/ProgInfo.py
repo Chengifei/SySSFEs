@@ -59,24 +59,26 @@ class Op:
     def __init__(self, name, argc=1, writer=None):
         self.name = name
         self.argc = argc
-        self.writer = writer
+        self.writer = writer if writer \
+           else lambda args, writer: f'{self.name}({", ".join(writer.write_expr(i) for i in args)})'
 
     def __repr__(self):
         return 'Op ' + self.name
 
 
-def diff_writer(args, default_writer: 'StepWriter'):
+def diff_writer(args, writer: 'StepWriter'):
     expr, *wrt = args
     if wrt:
         raise NotImplementedError
     all_vars = set(resolver.cNVar(i.name, i.order[0]+1) for i in expr.findDerivatives())
-    solving = {var for var in default_writer.state[-1] if var in all_vars}
+    solving = {var for var in writer.solving_for if var in all_vars}
     if not solving:
         varlist = list(expr.listVars())
-        with default_writer.VarWriter.tmp_override({i:default_writer.write_arg(i) for i in varlist}):
+        with writer.tmp_push(writer.VarWriter.lambda_arg,
+                             {i: writer.write_arg(i) for i in varlist}) as token:
             return 'math::calculus::fdiff(' \
-               + default_writer.write_lambda("&", varlist, "return " + default_writer.write_expr(expr) + ";") \
-               + ", step, " + ", ".join(default_writer.write_getter(i) for i in varlist) + ')'
+                   + writer.write_lambda("&", token, "return " + writer.write_expr(expr) + ";") \
+               + ", step, " + ", ".join(writer.write_getter(i) for i in varlist) + ')'
     else:
         # When using chain-rule we have to adjust writing scheme for base
         # variables as well
@@ -85,10 +87,11 @@ def diff_writer(args, default_writer: 'StepWriter'):
             var_base = resolver.cNVar(var.name, var.order[0] - 1)
         else:
             var_base = var.name
-        original_write = default_writer.VarWriter.write_value(var_base)
-        with default_writer.VarWriter.tmp_override({var_base: default_writer.write_arg(var_base)}):
-            text = f'math::calculus::fdiff({default_writer.write_lambda("&", [var_base], "return " + default_writer.write_expr(expr) + ";")}, {original_write})'
-            return text + f' * {default_writer.VarWriter.write(var)}'
+        original_write = writer.VarWriter.write_value(var_base)
+        with writer.tmp_push(writer.VarWriter.lambda_arg,
+                             {var_base: writer.write_arg(var_base)}) as token:
+            text = f'math::calculus::fdiff({writer.write_lambda("&", token, "return " + writer.write_expr(expr) + ";")}, {original_write})'
+        return text + f' * {writer.VarWriter.write(var)}'
 
 OP = {
     '+': Op('math::op::add', 2),
@@ -136,24 +139,23 @@ class Expr:
 class StepWriter:
     def __init__(self, space: 'Space'):
         self.space = space
-        self.state = []
+        self.solving_for = []
         self.VarWriter = StepWriter.VarWriter(self.space.locate_var)
-        self.noBind = Flag(False)
+        self.noBind = False
+
+    @contextmanager
+    def tmp_nobind(self):
+        old = self.noBind
+        self.noBind = True
+        yield
+        self.noBind = old
 
     @staticmethod
     @contextmanager
-    def tmp_flag(flag, a):
-        old = flag.flag
-        flag.flag = a
-        yield
-        flag.flag = old
-
-    @contextmanager
-    def tmp_solve_for(self, L):
-        length = len(self.state)
-        self.state.extend(L)
-        yield
-        self.state = self.state[:length]
+    def tmp_push(stack, L):
+        stack.append(L)
+        yield L
+        stack.pop()
 
     def write(self, step):
         use, update = step
@@ -165,12 +167,12 @@ class StepWriter:
                 end = ';'
             if update.order[0] == 0:
                 update = update.name
-            with self.VarWriter.tmp_override({update: self.write_arg(update)}):
-                return bind + self.write_alg(
-                    self.write_lambda('&',
-                                  [update],
-                                  f'return {self.write_rule(self.space.rules[use])};'),
-                                  self.VarWriter.write_value(update)) + end
+            with self.tmp_push(self.VarWriter.lambda_arg,
+                               {update: self.write_arg(update)}) as token, \
+                 self.tmp_push(self.solving_for, update):
+                rule = self.write_lambda('&', token, f'return {self.write_rule(self.space.rules[use])};')
+            seed = self.VarWriter.write_value(update)
+            return bind + self.write_alg(rule, seed) + end
         elif isinstance(use, tuple):
             if self.noBind:
                 bind, end = '', ''
@@ -178,18 +180,21 @@ class StepWriter:
                 bind = f'{self.VarWriter.write(update)} = '
                 end = ';'
             update_intermediate = use[1]
-            self.state.append([update_intermediate])
-            with self.tmp_flag(self.noBind, True), self.tmp_flag(self.VarWriter.ForceValue, True),\
-                    self.VarWriter.tmp_override({update_intermediate: self.write_arg(update_intermediate)}):
-                return bind + self.write_diff(
-                    self.write_lambda('&', ['t', update_intermediate], f'return {self.write(use)};'),
-                    't', self.VarWriter.write_value(update),
-                    'step') + '.first' + end
+            with self.tmp_nobind(), \
+                 self.tmp_push(self.VarWriter.lambda_arg,
+                    {update_intermediate: self.write_arg(update_intermediate),
+                     't': 't'}) as token, \
+                 self.tmp_push(self.solving_for, update):
+                gen = self.write_lambda('&', token, f'return {self.write(use)};')
+            wrt = 't'
+            seed = self.VarWriter.write_value(update)
+            step = 'step'
+            return bind + self.write_diff(gen, wrt, seed, step) + '.first' + end
         else:
             bind = ''
             end = '' if self.noBind else ';'
             return bind + self.write_alg_sys(', '.join(self.VarWriter.write(i) for i in update),
-                                             ', '.join(self.space.rules[i] for i in use),
+                                             ', '.join(self.space.rules[i] for i in use)
                                              ) + end
 
     @staticmethod
@@ -212,34 +217,24 @@ class StepWriter:
             expr = expr.content
         if isinstance(expr, tuple):
             op = expr[0]
-            if op.writer:
-                return op.writer(expr[1], self)
-            else:
-                return f'{op.name}({", ".join(self.write_expr(i) for i in expr[1])})'
+            return op.writer(expr[1], self)
         elif isinstance(expr, str) or isinstance(expr, resolver.cNVar):
-            return self.VarWriter.write(expr)
+            return self.VarWriter.write_value(expr)
         else:
             return str(expr)
 
     class VarWriter:
         def __init__(self, parent):
-            # controls writing of unrecorded variable
-            # i.e. the variables computed on demand
+            self.lambda_arg = []
             self.look_up = parent
-            self.ForceValue = Flag(False)
-            self.override = {} # primarily used for lambda
-
-        @contextmanager
-        def tmp_override(self, iter):
-            old = self.override.copy()
-            self.override.update(iter)
-            yield
-            self.override = old
 
         def write(self, var):
-            if var in self.override:
-                return self.override[var]
-            elif isinstance(var, resolver.cNVar):
+            for i in self.lambda_arg:
+                try:
+                    return i[var]
+                except KeyError:
+                    pass
+            if isinstance(var, resolver.cNVar):
                 if sum(var.order) != 0:
                     return f'{self.write(var.name)}_{var.order[0]}'
                 else:
@@ -252,6 +247,11 @@ class StepWriter:
                     return var
 
         def write_value(self, var):
+            for i in self.lambda_arg:
+                try:
+                    return i[var]
+                except KeyError:
+                    pass
             if isinstance(var, resolver.cNVar):
                 if sum(var.order) != 0:
                     return 0  # TODO: Check for step by-product of differential solver

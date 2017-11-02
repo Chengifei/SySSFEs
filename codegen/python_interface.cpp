@@ -73,7 +73,7 @@ PyObject* resolve(PyObject*, PyObject* args) {
             }
             for (PyScoped item(PyIter_Next(Rdiffs)); item.get(); item = PyScoped(
                     PyIter_Next(Rdiffs))) {
-                Py_INCREF(item.get());
+                Py_INCREF(item.get()); // CAUTION: MEMORY LEAK!!! SEE BELOW
                 eqn.push_back(static_cast<cNVar*>(item.get()));
                 vars.push_back(static_cast<cNVar*>(item.get()));
             }
@@ -85,7 +85,7 @@ PyObject* resolve(PyObject*, PyObject* args) {
         return nullptr;
     }
     RuleResolver Resolver(vars, eqns);
-    // unique vars somehow
+    // FIXME: unique vars somehow
     auto base = &*eqns.begin();
     if (!Resolver.process()) {
         PyErr_SetString(PyExc_ValueError, "Rule pack cannot be resolved");
@@ -93,6 +93,6 @@ PyObject* resolve(PyObject*, PyObject* args) {
         return nullptr;
     }
     for (Variable* var : vars)
-        Py_DECREF(static_cast<cNVar*>(var));
+        Py_DECREF(static_cast<cNVar*>(var)); // INC'D MORE THAN ONCE (possibly)
     return tuplize_order(base, Resolver.get());
 }
