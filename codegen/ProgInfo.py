@@ -179,11 +179,10 @@ class StepWriter:
             else:
                 bind = f'{self.VarWriter.write(update)} = '
                 end = ';'
-            update_intermediate = use[1]
             with self.tmp_nobind(), \
-                 self.tmp_push(self.VarWriter.lambda_arg,
-                    {update_intermediate: self.write_arg(update_intermediate),
-                     't': 't'}) as token, \
+                 self.tmp_push(self.VarWriter.lambda_arg, # requires Python 3.6
+                     {'t': 't',  # where default dict is ordered (calling convention)
+                     update: self.write_arg(update)}) as token, \
                  self.tmp_push(self.solving_for, update):
                 gen = self.write_lambda('&', token, f'return {self.write(use)};')
             wrt = 't'
@@ -225,8 +224,8 @@ class StepWriter:
 
     class VarWriter:
         def __init__(self, parent):
-            self.lambda_arg = []
             self.look_up = parent
+            self.lambda_arg = []
 
         def write(self, var):
             for i in self.lambda_arg:
