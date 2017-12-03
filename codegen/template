@@ -40,7 +40,8 @@ shared_& get_at_time(T& log, double time) {
 
 template <class T>
 shared_& back_get(T& log, std::size_t step) {
-    return *(log.end() - step)->second;
+    ++step; // the last one in history is garbage
+    return *(std::make_reverse_iterator(log.end()) + step)->second;
 }
 
 template <std::size_t obj, std::size_t offset, typename T>
@@ -69,7 +70,7 @@ int main() {
     time_ += step;
     while (time_ < t) {
         // we must do this at beginning instead of ending, to ensure consistency
-        shared_& last_data_ = *history.back().second;
+        const shared_& last_data_ = *history.back().second;
         history.push_back(std::make_pair(time_, std::make_unique<shared_>()));
         shared_& srd_ = *history.back().second;
 

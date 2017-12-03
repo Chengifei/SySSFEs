@@ -12,6 +12,7 @@
 #include <memory>
 #include <vector>
 #include <fstream>
+#include <iterator>
 #include "math/solvers.hpp"
 #include "math/calculus.hpp"
 #include "math/operators.hpp"

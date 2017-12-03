@@ -7,7 +7,17 @@ inline Variable& get_var(PyObject* o) {
 PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
     switch (op) {
         case Py_EQ:
-            return PyBool_FromLong(get_var(self) == get_var(self));
+            if (rhs->ob_type == &cNVarType)
+                return PyBool_FromLong(get_var(self) == get_var(self));
+            else if (get_var(self).order()[0] == 0 || PyUnicode_Check(rhs)) { // FIXME: Only order[0]
+                if (PyUnicode_READY(rhs)) // 0 for success
+                    return nullptr;
+                if (!PyUnicode_IS_ASCII(rhs))
+                    Py_RETURN_FALSE;
+                return PyBool_FromLong(
+                        get_var(self).name() == static_cast<char*>(PyUnicode_DATA(rhs))
+                );
+            }
     }
     return Py_NotImplemented;
 }
@@ -46,6 +56,8 @@ PyObject* cNVar_repr(PyObject* self) {
 }
 
 Py_hash_t cNVar_hash(PyObject* self) {
+    if (get_var(self).order()[0] == 0) // FIXME: Only order[0]
+        return PyUnicode_Type.tp_hash(PyUnicode_FromString(get_var(self).name().c_str()));
     return hash_value(get_var(self));
 }
 
