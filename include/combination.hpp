@@ -2,44 +2,38 @@
  * This file is part of ATOM
  * Unauthorized copy, modification or distribution is prohibited.
  *
- * This header defines a general class that produce fixed-length combination.
+ * This header defines a general class that produces fixed-length combinations.
  */
 #ifndef COMBINATION_HPP
 #define COMBINATION_HPP
 #include <cstddef>
 
-template <std::size_t size>
+template <std::size_t size, std::size_t start, std::size_t stop>
 class combinations {
-    static_assert(size != 0);
-    const std::size_t start, stop;
+    std::size_t guard = -1ULL;
     std::size_t current[size];
 public:
-    combinations(std::size_t start, std::size_t stop) noexcept
-        : start(start), stop(stop) {
+    combinations() noexcept {
         reset();
     }
-    // end condition: current[0] + size == stop
-    bool operator++() noexcept {
-        std::size_t i = size;
-        do {
-            --i;
-            if (current[i] + (size - i) != stop) {
-                ++current[i];
-                std::size_t first = current[i];
-                while (i != size)
-                    current[++i] = ++first;
-                return true;
-            }
-        } while (i != 0);
-        return false;
+    void operator++() {
+        std::size_t last = size - 1;
+        // clang was not able to separate constant to the other side
+        while (current[last] - last == stop - size) // current[last] + (size - last) == stop
+            --last;
+        for (std::size_t first = current[last] + 1; last != size;
+             ++last, ++first)
+            current[last] = first;
     }
-    std::size_t get(std::size_t i) const noexcept {
+    std::size_t operator[](std::size_t i) const {
         return current[i];
     }
-    void reset() noexcept {
-        std::size_t it = start;
-        for (std::size_t i = 0; i != size; ++i)
-            current[i] = it++;
+    bool exhausted() const {
+        return !current[-1];
+    }
+    void reset() {
+        for (std::size_t i = start, idx = 0; idx != size; ++i, ++idx)
+            current[idx] = i;
     }
 };
 #endif
