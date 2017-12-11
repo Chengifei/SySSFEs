@@ -30,6 +30,17 @@ struct Expr {
     };
     Expr() {}
     Expr(const Expr&) = delete;
+    Expr& operator=(const Expr&) = delete;
+    Expr(Expr&& rhs) : type(rhs.type), data(rhs.data) {
+        rhs.type = 0;
+        rhs.data = 0;
+    }
+    Expr& operator=(Expr&& rhs) {
+        type = rhs.type;
+        data = rhs.data;
+        rhs.type = 0;
+        rhs.data = 0;
+    }
     ~Expr() {
         if (type < 0)
             delete op;
