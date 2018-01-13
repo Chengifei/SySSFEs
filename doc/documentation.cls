@@ -9,11 +9,13 @@
 \LoadClass{article}
 \RequirePackage[margin=1in]{geometry}
 \RequirePackage{fancyhdr}
+\RequirePackage{listings}
 \pagestyle{fancy}
-\lhead{\textcopyright\space Yifei Zheng}
+\lhead{\textcopyright\space 2017 - 2018 Yifei Zheng}
 \renewcommand\headrule{}
 
 \newcommand{\NOTE}[1]{[\textit{Note:} #1 —-- end-note]}
+\newcommand{\EG}[1]{[\textit{Example:} #1 --- end-example]}
 
 \renewcommand\maketitle{
     \begin{titlepage}
@@ -56,22 +58,22 @@
     \refstepcounter{clausecnt}
     \def\cnt{\small\theclausecnt\space}
     \settowidth{\@tempdima}{\cnt}
-    \hspace{-\@tempdima}{\cnt}#1 \par
+    \hspace{-\@tempdima}{\cnt}#1
 }
 
 \newcommand\subclause[1]{
     \refstepcounter{subclausecnt}
     \def\cnt{\theclausecnt.\thesubclausecnt\space}
     \settowidth{\@tempdima}{\cnt}
-    \hspace{-\@tempdima}\cnt\hspace{0.5eM} #1 \par
+    \hspace{-\@tempdima}\cnt\hspace{0.5eM} #1
 }
 
 \newcommand\term[2]{
     \def\cnt{\textbf{#1}\space}
     \settowidth{\@tempdima}{\cnt}
-    \cnt{\hangindent\@tempdima #2 \par}
+    \cnt{\hangindent\@tempdima #2}
 }
 
 \newcommand\desc[1]{
-    [[\textsl{Impl}]] #1 \par
+    [[\textsl{Impl}]] #1
 }

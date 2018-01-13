@@ -1,0 +1,164 @@
+\documentclass{documentation}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{hyperref}
+\begin{document}
+\maketitle
+\section{Introduction}{intro}
+\clause{This document specifies implementation of ATOM language, yet it serves as documentation of \textit{the} implementation as well. For this reason, this document will have two kinds of specifications, namely clauses and implementation details, which are applicable to the ATOM language and this particular implementation, respectively.}
+
+\clause{ATOM is general purpose equation-based physics engine (IVP solver) generator focusing on generating efficient code in a user friendly approach with great flexibility.}
+
+\section{Terms}{intro.term}
+\clause{This section defines terms used in this documentation that have different meanings than in other context or need to be clarified for potential ambiguity. Refer to their definitions when the term is italicized, otherwise they can be interpreted just as usual.}
+\term{literal}{}
+\term{program}{refers to the ATOM program, written in ATOM language, instead of the generated one.}
+\term{compile-time}{The period from ATOM receives the input, till the generated program is run.}
+\term{run-time}{}
+\term{terminate}{dump the data until this point to a persistent medium, and abort the program with no clean up required}
+
+\section{Variable}{var}
+\clause{Variables are any data fields present in the \textit{program}.}
+
+\clause{Programmatic information about a variable is defined by its scope modifier and type name. Those are unordered but must be before the variable identifier. Valid scope modifier are \texttt{control} and \texttt{global}.}
+
+\clause{There are four kinds of variables: objects, loop control, non-control non-object global variables, and temporary variables.
+
+\begin{tabular}{c|c|c|c}
+& scope & type & history persistency \\\hline
+object & global & object & all\\\hline
+loop control & global & any built-in & all\\\hline
+non-object non-control global & global & any & none\\\hline
+temporary & inner loop & any & none\\\hline
+*watch & as parent & any built-in & as parent
+\end{tabular}}
+
+\clause{\texttt{control} declares the variable as a loop control, which implies global. It is legal to have both modifier present.}
+
+\clause{\texttt{global} declares the variable as a non-control non-object variable if type is not \texttt{object}, otherwise an object variable.}
+
+\clause{Every variable has a name served as its identifier.}
+
+\subsection{Types}{var.type}
+\clause{Each variable has a type. For variables other than \textit{object}s, types may be either variant of real or int.}
+
+\clause{No conversion is allowed from float to int or from int to float. Diagnostic is required.}
+
+\clause{Types may associate with qualifiers and/or at most one aggregate modifier, which modifies the type to be a new type. Qualifiers are attributes that provides extra information for ATOM. The qualifier supported is \texttt{const}. Aggregate modifiers, when combined with types, give the array form of the type. \EG{\texttt{real[2]} is a complete type.}}
+
+\clause{\textit{Object}s have type of object. No other objects may have type of object.}
+
+\clause{Float type represents a signed non integer number.}
+
+\clause{Int type represents a signed integer number.}
+
+\subsection{Initialization and Boundary Conditions}{var.init}
+\clause{Variables may have boundary conditions that will be verified during the simulation.}
+
+\clause{Boundary conditions may be a compile-time constant or an expression to be calculated at run-time.}
+
+\clause{\textit{Program}s shall define the behavior when a boundary condition is not met.}
+
+\clause{Boundary conditions is checked after any of the values are updated, no later than the value is firstly referenced.}
+
+\clause{Read from an uninitialized temporary variable is undefined.}
+
+\section{Rule}{rule}
+\clause{Rules are routines that are used to generate new data from available data.}
+
+\clause{Rules are universally applied on each object or tuple as requested.}
+
+\clause{Rules may be implicit as equations or explicit as assignments.}
+
+\clause{When requesting object tuple, numbers are used to represent these \textit{run-time} packed objects. Implementation shall return a tuple of objects that is exactly of the length of the greatest number referenced in that rule. \NOTE{The tuple must have a  protocol that allow access to its elements with constant time complexity regardless of its length.}}
+
+\subsection{Resolution}{rule.rsol}
+\clause{Resolution of rules is the process to revealing dependency of rules and generating a specific sequence according to which the rules are solved.}
+
+\clause{Determination of solvability of the system, a specific equation, a specific set of equations, is implementation defined.}
+
+\section{Input structure}{input}
+\clause{A valid \textit{program} has three sections, \texttt{object}, \texttt{rule} and \texttt{init}, exactly one after another. Each section is followed by a pair of curly brackets. Whitespaces are ignored.
+\begin{frame}[fragile]
+\begin{verbatim}
+program:= 
+    "object" "{" watch-def* "}"
+    "rule" "{" rule-def* "}"
+    "init" "{" control-def* "}"
+\end{verbatim}
+\end{frame}
+}
+
+\clause{The \texttt{object} section defines watches, delimited by newline. On each line, the input shall have variable declarations prepended by only type name. The scope is handled as per \hyperref[]{var.3}.}
+
+\section{Program execution}{exec}
+\clause{ATOM iterates on loop controls to generate data from initial values. The term \textit{loop} is used to refer to such a structure.}
+
+\clause{In such a loop, ATOM attempts to use \textit{rule}s to generate new data, which are then stored into \textit{variable}s. In other words, \textit{variable}s are then updated by \textit{rule}s.}
+
+\clause{Implementation shall be able to generate either a standalone program or library that can be called by other programs.}
+
+\clause{No external branch shall present in the innermost loop. Data that must be calculated with branches must be ready before the entrance of the innermost loop.}
+
+\subsection{Mathematical Equivalence}{exec.mathequiv}
+\clause{This section specifies the requirement of the generated solver, specifically by comparing the result to that of a ideal closed-form analytical solution.}
+
+\clause{Real numbers are represented as binary 64-bit float numbers or better, which must at least as absolutely precise as binary floats $(\forall a \in\mathbb{R},\ \exists\, a_{repr}\ s.t.\: |a_{repr} - a| \le |a_{float64} - a|$). Representation of NaN or infinities are not required.}
+
+\clause{Integer is stored exactly and possibly as a different type than that for real.}
+
+\clause{Implementation must handle number in $[-2^{31}, 2^{31} - 1]$, with precision no less than 12 decimal significant figures for real, exact for integer.}
+
+\clause{If a mathematical function gets a invalid argument (for example, out of domain), the incident should be reported, and simulation may terminate. \NOTE{Simulation may silently proceed if the program is robust to bad arguments and previous data are kept uncorrupted.}}
+
+\clause{Infix operators including ‘+’, ‘-’, ‘*’, ‘/’, ‘\^{}’ are accepted as their meaning in mathematical context.}
+
+\clause{An algebraic equation is solved when the absolute difference of lhs and rhs is less than a user-defined tolerance, default to $2^{-27}\ \mathbf{max}\{|lhs|, |rhs|, 1\}$. An equation system is solved when the 2-norm of the vector is less than a user-defined tolerance, default to $2^{-21}\ \mathbf{max}\{|\text{initial difference}|, 1\}$.}
+
+\clause{Forward derivatives, when there’s no future data available, are produced from previous data, by a implementation defined method.}
+
+\clause{Solution at a specific point of a differential equation is valid iff the difference is less than the tolerance of single algebraic equation.}
+
+\clause{Vectors may be defined using array syntax.}
+
+\clause{Addition, subtraction, negation and scalar multiplication of vectors are handled via infix operators as in mathematical contexts. Addition and subtraction with incompatible size is a \textit{compile-time} error.}
+
+\clause{Dot and cross product for vectors are handled via \texttt{.mul}.}
+
+\section{Standard Library}{stdlib}
+\subsection{Support for simulating rule with domain}{stdlib.domrule}
+\desc{Works by having multiple combination generators in the generated program.}
+
+\subsection{Support for simulating ternary rules}{stdlib.condrule}
+\desc{Works by wrapping the condition as a boundary condition, therefore generates two separate programs and chain them up.}
+
+\subsection{Support for type nesting}{stdlib.nesttype}
+\desc{Works by generating two separate programs and wrapping one of the nest type as an opaque type (size is known), requires internal support. The outer type will have no access into the inner type.}
+
+\section{Frontend}{front}
+\clause{The frontend is the user interface and the immediate underlying code that handles the input.}
+\desc{The frontend is implemented in Python 3, and the code will remain in Python until it stabilizes.}
+
+\clause{The frontend shall have interface to:}
+\subclause{select a type,}
+\subclause{create a modified type,}
+\subclause{define \textit{object} type from types of \textit{watch}es,}
+\subclause{create a loop control variable of one of the built-in types,}
+\subclause{create a non-object non-control global variable,}
+\subclause{create rule from an equation, and}
+\subclause{initialize or add boundary condition to a variable.}
+
+\section{Backend}{back}
+\clause{Backend refers to the part of ATOM implementation that generates code that is otherwise executable. For this reason, this section defines the interface to ATOM generated code.}
+
+\clause{The generated program shall be completely separate from ATOM support files.}
+
+\clause{A class or other equivalent concept shall be generated and named \texttt{object\_}, if applicable.}
+
+\clause{All names of \textit{watch}es are preserved.}
+
+\clause{Derivatives of a variable are named in the fashion of \texttt{<variable name>\_<order>}.}
+
+\end{document}
