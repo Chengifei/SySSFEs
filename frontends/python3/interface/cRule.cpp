@@ -22,9 +22,9 @@ PyObject* cRule_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "src") == 0)
         return make_csrc_tracker(static_cast<cRule*>(self)->src);
     else if (strcmp(attr_name, "lhs") == 0)
-        return static_cast<cRule*>(self)->lhs;
+        return inc_prpg(static_cast<cRule*>(self)->lhs);
     else if (strcmp(attr_name, "rhs") == 0)
-        return static_cast<cRule*>(self)->rhs;
+        return inc_prpg(static_cast<cRule*>(self)->rhs);
     PyErr_Format(PyExc_AttributeError,
                  "cRule object has no attribute '%.400s'", attr_name);
     return nullptr;

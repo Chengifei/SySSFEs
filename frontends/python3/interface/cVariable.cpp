@@ -25,7 +25,7 @@ PyObject* cVariable_getattr(PyObject* self, char* attr_name) {
         return obj;
     }
     else if (strcmp(attr_name, "val") == 0)
-        return static_cast<cVariable*>(self)->val;
+        return inc_prpg(static_cast<cVariable*>(self)->val);
     PyErr_Format(PyExc_AttributeError,
                  "cVariable object has no attribute '%.400s'", attr_name);
     return nullptr;
@@ -52,7 +52,8 @@ int cVariable_init(PyObject* self, PyObject* args, PyObject*) {
     if (!PyArg_ParseTuple(args, "O|O", &type, &val))
         return -1;
     new(&(static_cast<cVariable*>(self)->var)) Variable{static_cast<cTypes*>(type)->type};
-    Py_INCREF(Py_None);
+    if (val == Py_None)
+        Py_INCREF(Py_None);
     static_cast<cVariable*>(self)->val = val;
     return 0;
 }

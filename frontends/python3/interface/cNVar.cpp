@@ -8,7 +8,7 @@ PyObject* cNVar_cmp(PyObject* self, PyObject* rhs, int op) {
     switch (op) {
         case Py_EQ:
             if (rhs->ob_type == &cNVarType)
-                return PyBool_FromLong(get_var(self) == get_var(self));
+                return PyBool_FromLong(get_var(self) == get_var(rhs));
             else if (get_var(self).order()[0] == 0 || PyUnicode_Check(rhs)) { // FIXME: Only order[0]
                 if (PyUnicode_READY(rhs)) // 0 for success
                     return nullptr;
@@ -31,6 +31,12 @@ PyObject* cNVar_getattro(PyObject* self, PyObject* attro) {
         for (std::size_t i = 0; i != 8; ++i)
             PyList_SET_ITEM(L, i, PyLong_FromLong(static_cast<cNVar*>(self)->order()[i]));
         return L;
+    }
+    else if (strcmp(attr_name, "start") == 0) {
+        if (static_cast<cNVar*>(self)->as_start)
+            Py_RETURN_TRUE;
+        else
+            Py_RETURN_FALSE;
     }
     PyErr_Format(PyExc_AttributeError,
                  "cNVar object has no attribute '%.400s'", attr_name);

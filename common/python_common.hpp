@@ -55,6 +55,11 @@ void call_destructor(PyObject* self) noexcept {
     (*Py_TYPE(self)->tp_free)(self);
 }
 
+static PyObject* inc_prpg(PyObject* obj) noexcept {
+    Py_INCREF(obj);
+    return obj;
+}
+
 template <class T, class U>
 T PyExc(T t, U fail_ret) {
     if (t == fail_ret)
