@@ -4,9 +4,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -348,25 +348,36 @@ class Space:
                 return
         self.watches[var] = cTypes(types, False, 0)
 
+    def var_is_known(self, NVar):
+        return all(i == 0 for i in
+                   NVar.order)  # FIXME: Refer to actually boundary conditions
+
+    def var_need_update(self, NVar):
+        v = self.locate_var(NVar.name)
+        return isinstance(v, tuple)  # FIXME
+
     def processRules(self):
 
         #TODO: Check consistency of boundary values first
 
-        def is_known(NVar):
-            return all(i == 0 for i in NVar.order) # FIXME: Refer to actually boundary conditions
+        # prep for C++ routines, these are awkward in C++
+        NVars = []
+        eqns = []
 
-        def need_update(NVar):
-            v = self.locate_var(NVar.name)
-            return isinstance(v, tuple) # FIXME
+        for eqn in self.rules:
+            eqns.append([])
+            for i in chain(eqn.lhs.findDerivatives(), eqn.rhs.findDerivatives()):
+                try:
+                    idx = NVars.index(i)
+                except ValueError:
+                    i.can_start = self.var_is_known(i)
+                    i.need_update = self.var_need_update(i)
+                    idx = len(NVars)
+                    NVars.append(i)
+                eqns[-1].append(idx)
 
-        def list_der(x):
-            for i in x.findDerivatives():
-                i.can_start = is_known(i)
-                i.need_update = need_update(i)
-                yield i
+        self.steps = resolver.resolve(eqns, NVars)
 
-        self.steps = resolver.resolve(self.rules, list_der)
-        print(self.steps)
         # propagate updates here
         updated = {}
         for i, (_, var) in enumerate(self.steps):

@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,7 +41,7 @@ int cRule_init(PyObject* self, PyObject* args, PyObject*) {
     if (!PyArg_ParseTuple(args, "O!OO", &csrc_trackerType, &src, &lhs, &rhs))
         return -1;
     cRule& cself = *static_cast<cRule*>(self);
-    Py_INCREF(src);
+    Py_INCREF(src); // FIXME: DECREF this in desctructor
     cself.src = static_cast<csrc_tracker*>(src)->st;
     Py_INCREF(lhs);
     cself.lhs = lhs;

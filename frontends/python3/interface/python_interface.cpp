@@ -63,31 +63,22 @@ PyObject* resolve(PyObject*, PyObject* args) {
     std::vector<Variable*> vars;
     std::vector<Rule> eqns;
     try {
-        PyObject* pack, *der_gen;
-        PyOnly(PyArg_ParseTuple(args, "O!O", &PyList_Type, &pack, &der_gen), 1);
+        PyObject* pack, *pyvars;
+        PyOnly(PyArg_ParseTuple(args, "O!O!", &PyList_Type, &pack, &PyList_Type, &pyvars), 1);
+        std::size_t var_sz = PyList_GET_SIZE(pyvars);
+        vars.reserve(var_sz);
         // steal resource from Python
-        std::size_t sz = PyList_GET_SIZE(pack);
-        for (std::size_t i = 0; i != sz; ++i) {
-            PyObject* r = PyList_GET_ITEM(pack, i);
-            cRule& rule = *static_cast<cRule*>(r);
-            PyScoped Ldiffs(PyExc(PyObject_CallFunctionObjArgs(der_gen, rule.lhs,
-                                                               nullptr), nullptr));
-            PyScoped Rdiffs(PyExc(PyObject_CallFunctionObjArgs(der_gen, rule.rhs,
-                                                               nullptr), nullptr));
-            std::vector<Variable*> eqn;
-            for (PyScoped item(PyIter_Next(Ldiffs)); item.get(); item = PyScoped(
-                    PyIter_Next(Ldiffs))) {
-                Py_INCREF(item.get());
-                eqn.push_back(static_cast<cNVar*>(item.get()));
-                vars.push_back(static_cast<cNVar*>(item.get()));
-            }
-            for (PyScoped item(PyIter_Next(Rdiffs)); item.get(); item = PyScoped(
-                    PyIter_Next(Rdiffs))) {
-                Py_INCREF(item.get()); // CAUTION: MEMORY LEAK!!! SEE BELOW
-                eqn.push_back(static_cast<cNVar*>(item.get()));
-                vars.push_back(static_cast<cNVar*>(item.get()));
-            }
-            PyOnly(PyErr_Occurred(), nullptr);
+        for (std::size_t i = 0; i != var_sz; ++i) {
+            Py_INCREF(PyList_GET_ITEM(pyvars, i));
+            vars.push_back(static_cast<cNVar *>(PyList_GET_ITEM(pyvars, i)));
+        }
+        for (std::size_t i = 0, sz = PyList_GET_SIZE(pack); i != sz; ++i) {
+            PyObject* pyeqn = PyList_GET_ITEM(pack, i);
+            std::size_t eqn_sz = PyList_GET_SIZE(pyeqn);
+            Rule eqn;
+            eqn.reserve(eqn_sz);
+            for (std::size_t i = 0; i != eqn_sz; ++i)
+                eqn.push_back(vars[PyLong_AsSize_t(PyList_GET_ITEM(pyeqn, i))]);
             eqns.push_back(std::move(eqn));
         }
     }
@@ -103,6 +94,6 @@ PyObject* resolve(PyObject*, PyObject* args) {
         return nullptr;
     }
     for (Variable* var : vars)
-        Py_DECREF(static_cast<cNVar*>(var)); // INC'D MORE THAN ONCE (possibly)
+        Py_DECREF(static_cast<cNVar*>(var));
     return tuplize_order(base, Resolver.get());
 }

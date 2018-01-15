@@ -57,7 +57,7 @@ int cNVar_setattro(PyObject* self, PyObject* attro, PyObject* val) {
 }
 
 PyObject* cNVar_repr(PyObject* self) {
-    return PyUnicode_FromFormat("%s(%zu)", 
+    return PyUnicode_FromFormat("%s(%zu)",
             static_cast<cNVar*>(self)->name(), static_cast<cNVar*>(self)->order());
 }
 
