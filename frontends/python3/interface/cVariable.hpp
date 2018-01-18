@@ -19,7 +19,7 @@
 #include "Variable.hpp"
 struct cVariable : PyObject {
     Variable var;
-    PyObject* val;
+    PyObject* dict;
 };
 
 PyObject* cVariable_getattr(PyObject* self, char* attr_name);

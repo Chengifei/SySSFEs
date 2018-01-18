@@ -318,11 +318,12 @@ class Space:
     def __init__(self):
         self.objs = odict()
         self.watches = odict()
-        self.globals = {'t': Var(cTypes(cTypes.BaseEnum.DOUBLE, True, 0), 1),
-                        'step': Var(cTypes(cTypes.BaseEnum.DOUBLE, False, 0), 0.001)}
-        self.tmps = {}
+        self.globals = odict()
+        self.globals['step'] = Var(cTypes(cTypes.BaseEnum.DOUBLE, True, 0), 0.01)
+        self.tmps = odict()
         self.rules = []
-        self.loopctl = set()
+        self.loopctl = {}
+        self.addLoopctl('t', cTypes.BaseEnum.DOUBLE, 0, 1)
         self.steps = None
 
     def addRule(self, rule, src=None):
@@ -339,8 +340,11 @@ class Space:
     def addTmp(self, var, types, src=None):
         self.tmps[var] = DeclType(src, types)
 
-    def addLoopctl(self, var, src):
-        pass
+    def addLoopctl(self, var, types, begin, end, src=None):
+        tmp = Var(cTypes(types, False, 0))
+        tmp.begin = begin
+        tmp.end = end
+        self.loopctl[var] = tmp
 
     def addWatch(self, var, types, src=None):
         if var in self.watches:
@@ -397,8 +401,13 @@ class Space:
                            (', '.join(str(i) for i in obj.vals) for obj in self.objs.values()))
         yield from consume(gen, (f'{tv.type} {name} = {tv.val};' for name, tv in self.globals.items()))
         yield from consume(gen, [f'combinations<1, 0, {len(self.objs)}> comb_;'])  # FIXME: insert true value when tested
+        yield from consume(gen, (f'{val.type} {name} = {val.begin};' for name, val in self.loopctl.items()))
+        yield from consume(gen, (str(v) for v in self.loopctl))
+        yield from consume(gen, (f'{n} < {i.end}' for n, i in self.loopctl.items()))
         writer = StepWriter(self)
         yield from consume(gen, writer)
+        yield from consume(gen, (str(v) for v in self.loopctl))
+        yield from consume(gen, (str(v) for v in self.loopctl))
         yield from gen
 
     def locate_var(self, var):
@@ -410,5 +419,7 @@ class Space:
             return self.tmps[var]
         elif var in self.globals:
             return self.globals[var]
+        elif var in self.loopctl:
+            return self.loopctl[var]
         else:
             return self.objs[var]
