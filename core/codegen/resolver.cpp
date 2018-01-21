@@ -146,10 +146,10 @@ next_rule:;
         else if (ret == BROADCAST_SUCCEED_AND_UPDATED)
              recurse = true;
     }
+    for (const auto& rule : to_be_updated)
+        order.add_alg(rule.first, *rule.second);
     if (recurse)
         if (!alg_consistent(true))
             return false;
-    for (const auto& rule : to_be_updated)
-        order.add_alg(rule.first, *rule.second);
     return true;
 }

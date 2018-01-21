@@ -86,7 +86,6 @@ PyObject* resolve(PyObject*, PyObject* args) {
         return nullptr;
     }
     RuleResolver Resolver(vars, eqns);
-    // FIXME: unique vars somehow
     auto base = &*eqns.begin();
     if (!Resolver.process()) {
         PyErr_SetString(PyExc_ValueError, "Rule pack cannot be resolved");
