@@ -322,7 +322,7 @@ class Space:
         self.globals['step'] = Var(cTypes(cTypes.BaseEnum.DOUBLE, True, 0), 0.01)
         self.tmps = odict()
         self.rules = []
-        self.loopctl = {}
+        self.loopctl = odict()
         self.addLoopctl('t', cTypes.BaseEnum.DOUBLE, 0, 1)
         self.steps = None
 
@@ -400,10 +400,12 @@ class Space:
         yield from consume(gen,
                            (', '.join(str(i) for i in obj.vals) for obj in self.objs.values()))
         yield from consume(gen, (f'{tv.type} {name} = {tv.val};' for name, tv in self.globals.items()))
-        yield from consume(gen, [f'combinations<1, 0, {len(self.objs)}> comb_;'])  # FIXME: insert true value when tested
+        yield from consume(gen, [f'<1, 0, {len(self.objs)}>'])  # FIXME: insert true value when tested
         yield from consume(gen, (f'{val.type} {name} = {val.begin};' for name, val in self.loopctl.items()))
         yield from consume(gen, (str(v) for v in self.loopctl))
+        yield from consume(gen, (str(v) for v in self.loopctl))
         yield from consume(gen, (f'{n} < {i.end}' for n, i in self.loopctl.items()))
+        yield from consume(gen, (str(v) for v in self.loopctl))
         writer = StepWriter(self)
         yield from consume(gen, writer)
         yield from consume(gen, (str(v) for v in self.loopctl))
