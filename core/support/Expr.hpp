@@ -54,6 +54,7 @@ struct Expr {
         data = rhs.data;
         rhs.type = 0;
         rhs.data = 0;
+        return *this;
     }
     ~Expr() {
         if (type < 0)
