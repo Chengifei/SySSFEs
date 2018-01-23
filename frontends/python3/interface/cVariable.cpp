@@ -21,7 +21,7 @@ PyObject* cVariable_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "type") == 0) {
         // This relies on cTypes being a immutable Python type.
         cTypes* obj = static_cast<cTypes*>(cTypesType.tp_new(&cTypesType, nullptr, nullptr));
-        new(&obj->type) Types(static_cast<cVariable*>(self)->var.t);
+        new(&obj->type) support::type(static_cast<cVariable*>(self)->var.t);
         return obj;
     }
     else if (PyObject* ret = PyDict_GetItemString(static_cast<cVariable*>(self)->dict, attr_name))
@@ -52,7 +52,7 @@ int cVariable_init(PyObject* self, PyObject* args, PyObject*) {
     PyObject* val = Py_None;
     if (!PyArg_ParseTuple(args, "O|O", &type, &val))
         return -1;
-    new(&(static_cast<cVariable*>(self)->var)) Variable{static_cast<cTypes*>(type)->type};
+    new(&(static_cast<cVariable*>(self)->var)) support::variable{static_cast<cTypes*>(type)->type};
     Py_INCREF(val);
     static_cast<cVariable*>(self)->dict = PyDict_New();
     cVariable_setattr(self, "val", val);

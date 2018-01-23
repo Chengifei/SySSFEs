@@ -14,11 +14,11 @@
  */
 
 #include <python_common.hpp>
-#include <rule_types.hpp>
-#include <SrcLocation.hpp>
+#include <codegen/rule_types.hpp>
+#include <support/src_location.hpp>
 
 struct cRule : PyObject {
-    SrcLocation src;
+    support::src_location src;
     PyObject* lhs, *rhs;
 };
 

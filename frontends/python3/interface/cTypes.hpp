@@ -15,10 +15,10 @@
 
 #ifndef ATOMS_CODEGEN_SUPPORT_CTYPES_HPP
 #define ATOMS_CODEGEN_SUPPORT_CTYPES_HPP
-#include "../../common/python_common.hpp"
-#include "Types.hpp"
+#include <python_common.hpp>
+#include <support/type.hpp>
 struct cTypes : PyObject {
-    Types type;
+    support::type type;
 };
 
 typedef PyObject BaseEnum;

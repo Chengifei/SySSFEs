@@ -13,13 +13,14 @@
  * limitations under the License.
  */
 
-#ifndef ATOM_CODEGEN_SUPPORT_VARIABLE_HPP
-#define ATOM_CODEGEN_SUPPORT_VARIABLE_HPP
-#include <string>
-#include "../../common/python_common.hpp"
-#include "Types.hpp"
+#ifndef SUPPORT_SRC_TRACKER_HPP
+#define SUPPORT_SRC_TRACKER_HPP
+namespace support {
 
-struct Variable {
-    Types t;
+struct src_location {
+    unsigned lineno;
+    unsigned colno;
 };
+
+}
 #endif

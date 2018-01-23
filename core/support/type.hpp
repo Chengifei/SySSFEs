@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
-#ifndef ATOM_CODEGEN_SUPPORT_TYPES_HPP
-#define ATOM_CODEGEN_SUPPORT_TYPES_HPP
-struct Types {
+#ifndef SUPPORT_TYPES_HPP
+#define SUPPORT_TYPES_HPP
+namespace support {
+
+struct type {
     enum : char {
         DOUBLE,
         INT,
@@ -24,4 +26,6 @@ struct Types {
     bool is_const;
     int agg;
 };
+
+}
 #endif

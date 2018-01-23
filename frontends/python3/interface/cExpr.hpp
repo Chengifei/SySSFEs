@@ -16,8 +16,8 @@
 
 #ifndef ATOM_CODEGEN_SUPPORT_CEXPR_HPP
 #define ATOM_CODEGEN_SUPPORT_CEXPR_HPP
-#include "../../common/python_common.hpp"
-#include "Expr.hpp"
+#include <python_common.hpp>
+#include <support/Expr.hpp>
 #include <memory>
 
 enum OP {
@@ -30,7 +30,7 @@ enum OP {
 
 struct cExpr : PyObject {
     bool view;
-    Expr* tree;
+    support::Expr* tree;
     ~cExpr() {
         if (!view)
             delete tree;

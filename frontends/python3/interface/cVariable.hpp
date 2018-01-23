@@ -15,10 +15,10 @@
 
 #ifndef ATOM_CODEGEN_SUPPORT_CVARIABLE_HPP
 #define ATOM_CODEGEN_SUPPORT_CVARIABLE_HPP
-#include "../../common/python_common.hpp"
-#include "Variable.hpp"
+#include <python_common.hpp>
+#include <support/variable.hpp>
 struct cVariable : PyObject {
-    Variable var;
+    support::variable var;
     PyObject* dict;
 };
 

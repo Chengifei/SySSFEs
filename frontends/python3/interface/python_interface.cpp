@@ -15,8 +15,8 @@
  * This file defines functions that are used to convert data from and to Python.
  */
 
-#include "../common/python_common.hpp"
-#include "rule_types.hpp"
+#include <python_common.hpp>
+#include <codegen/rule_types.hpp>
 #include "cNVar.hpp"
 #include "cRule.hpp"
 

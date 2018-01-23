@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-#include "../common/python_common.hpp"
-#include "rule_types.hpp"
+#include <python_common.hpp>
+#include <codegen/rule_types.hpp>
 
 struct cNVar : PyObject, Variable {
     const char* name() const {

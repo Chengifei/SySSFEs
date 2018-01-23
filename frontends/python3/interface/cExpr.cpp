@@ -61,8 +61,8 @@ int cExpr_setattro(PyObject* self, PyObject* attr_name, PyObject* val) {
 }
 
 PyObject* cExpr_repr(PyObject* self) {
-    Expr& s = *static_cast<cExpr*>(self)->tree;
-    if (s.type == Expr::OP)
+    support::Expr& s = *static_cast<cExpr*>(self)->tree;
+    if (s.type == support::Expr::OP)
         return PyUnicode_FromFormat("<cExpr containing Op(%i)>", s.op->op_data);
     return PyUnicode_FromFormat("<cExpr containing data(%s)>", s.data);
 }
@@ -73,24 +73,24 @@ int cExpr_init(PyObject* self, PyObject* args, PyObject*) {
     int force_arg_treat_as_argc = 0;
     if (!PyArg_ParseTuple(args, "O|i", &arg, &force_arg_treat_as_argc))
         return -1;
-    s->tree = new Expr;
+    s->tree = new support::Expr;
     s->view = false;
     if (PyLong_CheckExact(arg)) {
-        s->tree->type = Expr::OP;
+        s->tree->type = support::Expr::OP;
         switch (int op = PyLong_AsLong(arg)) {
             default:
-                s->tree->op = new Expr::Op(2, reinterpret_cast<void*>(op));
+                s->tree->op = new support::Expr::Op(2, reinterpret_cast<void*>(op));
         }
         return 0;
     }
     else if (PyUnicode_CheckExact(arg)) {
         if (force_arg_treat_as_argc) {
-            s->tree->type = Expr::OP;
+            s->tree->type = support::Expr::OP;
             // see below
-            s->tree->op = new Expr::Op(force_arg_treat_as_argc, PyUnicode_AsUTF8(arg));
+            s->tree->op = new support::Expr::Op(force_arg_treat_as_argc, PyUnicode_AsUTF8(arg));
         }
         else {
-            s->tree->type = Expr::DATA;
+            s->tree->type = support::Expr::DATA;
             // NO Py_INCREF(arg) because Expr doesn't delete it
             // But it's unjustified yet
             s->tree->data = PyUnicode_AsUTF8(arg);
@@ -101,7 +101,7 @@ int cExpr_init(PyObject* self, PyObject* args, PyObject*) {
     return -1;
 }
 
-PyObject* make_view(Expr* p) {
+PyObject* make_view(support::Expr* p) {
     PyObject* view = cExprType.tp_alloc(&cExprType, 0);
     static_cast<cExpr*>(view)->view = true;
     static_cast<cExpr*>(view)->tree = p;
@@ -109,7 +109,7 @@ PyObject* make_view(Expr* p) {
 }
 
 PyObject* rkid(PyObject* self, Py_ssize_t num) {
-    if (static_cast<cExpr*>(self)->tree->type == Expr::OP) {
+    if (static_cast<cExpr*>(self)->tree->type == support::Expr::OP) {
         if (num < static_cast<cExpr*>(self)->tree->op->argc) {
             return make_view(&static_cast<cExpr*>(self)->tree->op->args[num]);
         }
@@ -124,7 +124,7 @@ PyObject* rkid(PyObject* self, Py_ssize_t num) {
 }
 
 int wkid(PyObject* self, Py_ssize_t num, PyObject* val) {
-    if (static_cast<cExpr*>(self)->tree->type == Expr::OP) {
+    if (static_cast<cExpr*>(self)->tree->type == support::Expr::OP) {
         if (num < static_cast<cExpr*>(self)->tree->op->argc) {
             if (static_cast<cExpr*>(val)->view)
                 return -1;
@@ -141,7 +141,7 @@ int wkid(PyObject* self, Py_ssize_t num, PyObject* val) {
 }
 
 Py_ssize_t len(PyObject* self) {
-    if (static_cast<cExpr*>(self)->tree->type == Expr::OP)
+    if (static_cast<cExpr*>(self)->tree->type == support::Expr::OP)
         return static_cast<cExpr*>(self)->tree->op->argc;
     PyErr_SetString(PyExc_ValueError, "Length N/A on non-op nodes");
     return -1;

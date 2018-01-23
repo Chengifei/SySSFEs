@@ -13,10 +13,14 @@
  * limitations under the License.
  */
 
-#ifndef ATOM_SRC_TRACKER_HPP
-#define ATOM_SRC_TRACKER_HPP
-struct SrcLocation {
-    unsigned lineno;
-    unsigned colno;
+#ifndef SUPPORT_VARIABLE_HPP
+#define SUPPORT_VARIABLE_HPP
+#include "type.hpp"
+namespace support {
+
+struct variable {
+    type t;
 };
+
+}
 #endif

@@ -35,7 +35,7 @@ int csrc_tracker_init(PyObject* self, PyObject* args, PyObject*) {
     unsigned col;
     if (!PyArg_ParseTuple(args, "II", &line, &col))
         return -1;
-    new(&(static_cast<csrc_tracker*>(self)->st)) SrcLocation{line, col};
+    new(&(static_cast<csrc_tracker*>(self)->st)) support::src_location{line, col};
     return 0;
 }
 

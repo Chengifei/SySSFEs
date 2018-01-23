@@ -15,7 +15,7 @@
  * This file exports the csrc_tracker module.
  */
 
-#include "../../common/python_common.hpp"
+#include <python_common.hpp>
 #include "cSrcLocation.hpp"
 #include "cTypes.hpp"
 #include "cVariable.hpp"
@@ -41,9 +41,9 @@ PyInit_support() {
     PyModule_AddObject(m, "cSrcLocation", reinterpret_cast<PyObject*>(&csrc_trackerType));
     PyOnly(PyType_Ready(&cTypesType), 0);
     PyOnly(PyType_Ready(&cTypesBaseEnum), 0);
-    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "DOUBLE", PyLong_FromLong(Types::DOUBLE));
-    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "INT", PyLong_FromLong(Types::INT));
-    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "BUFFER", PyLong_FromLong(Types::BUFFER));
+    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "DOUBLE", PyLong_FromLong(support::type::DOUBLE));
+    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "INT", PyLong_FromLong(support::type::INT));
+    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "BUFFER", PyLong_FromLong(support::type::BUFFER));
     PyDict_SetItemString(cTypesType.tp_dict, "BaseEnum", reinterpret_cast<PyObject*>(&cTypesBaseEnum));
     Py_INCREF(&cTypesBaseEnum);
     Py_INCREF(&cTypesType);

@@ -14,9 +14,13 @@
  *
  * This header defines the class Expr.
  */
+
+#ifndef SUPPORT_EXPR_HPP
+#define SUPPORT_EXPR_HPP
 #include <memory>
 #include <iter_utils.hpp>
 #include <stack>
+namespace support {
 
 /// Expr does not assume the ownership of data
 struct Expr {
@@ -121,3 +125,6 @@ struct Expr_preorder_iter :
         return !current;
     }
 };
+
+}
+#endif
