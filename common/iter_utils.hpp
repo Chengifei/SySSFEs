@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -213,7 +213,7 @@ struct product : iter_utils::non_trivial_end_iter<product<TIT, UIT>> {
     typedef typename UIT::value_type U;
     TIT begin1, it1, end1;
     UIT begin2, it2, end2;
-    product(TIT begin1, TIT end1, UIT begin2, UIT end2) 
+    product(TIT begin1, TIT end1, UIT begin2, UIT end2)
         : begin1(begin1), it1(begin1), end1(end1), begin2(begin2), it2(begin2), end2(end2) {}
     product& operator++() {
         if (it1 != end1)
