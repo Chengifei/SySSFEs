@@ -19,7 +19,6 @@
 #include "cSrcLocation.hpp"
 #include "cTypes.hpp"
 #include "cVariable.hpp"
-#include "cExpr.hpp"
 
 static PyModuleDef SupportModule = {
         PyModuleDef_HEAD_INIT,
@@ -50,14 +49,6 @@ PyInit_support() {
     PyModule_AddObject(m, "cTypes", reinterpret_cast<PyObject*>(&cTypesType));
     PyOnly(PyType_Ready(&cVariableType), 0);
     Py_INCREF(&cVariableType);
-    PyOnly(PyType_Ready(&cExprType), 0);
-    PyDict_SetItemString(cExprType.tp_dict, "PLUS", PyLong_FromLong(OP::PLUS));
-    PyDict_SetItemString(cExprType.tp_dict, "MINUS", PyLong_FromLong(OP::MINUS));
-    PyDict_SetItemString(cExprType.tp_dict, "MUL", PyLong_FromLong(OP::MUL));
-    PyDict_SetItemString(cExprType.tp_dict, "DIV", PyLong_FromLong(OP::DIV));
-    PyDict_SetItemString(cExprType.tp_dict, "POW", PyLong_FromLong(OP::POW));
-    Py_INCREF(&cExprType);
-    PyModule_AddObject(m, "cExpr", reinterpret_cast<PyObject*>(&cExprType));
     PyModule_AddObject(m, "cVariable", reinterpret_cast<PyObject*>(&cVariableType));
     return m;
 }

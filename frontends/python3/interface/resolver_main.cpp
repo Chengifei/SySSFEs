@@ -38,6 +38,8 @@ static PyModuleDef ResolverModule = {
     nullptr
 };
 
+// FIXME: Use python import along with linking
+
 PyMODINIT_FUNC
 PyInit_resolver() {
     PyObject* m = PyExc(PyModule_Create(&ResolverModule), nullptr);

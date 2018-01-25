@@ -12,16 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This header is made obsolete by antlr4 implemented in C++.
  */
 
-#ifndef ATOM_CODEGEN_SUPPORT_CEXPR_HPP
-#define ATOM_CODEGEN_SUPPORT_CEXPR_HPP
-#include <python_common.hpp>
-#include <support/Expr.hpp>
-#include <memory>
-
+#ifndef OPMAP_HPP
+#define OPMAP_HPP
 enum OP {
     PLUS = 0,
     MINUS,
@@ -29,21 +23,4 @@ enum OP {
     DIV,
     POW
 };
-
-struct cExpr : PyObject {
-    bool view;
-    support::Expr* tree;
-    ~cExpr() {
-        if (!view)
-            delete tree;
-    }
-};
-
-PyObject* cExpr_getattr(PyObject* self, char* attr_name);
-int cExpr_setattr(PyObject* self, char* attr_name, PyObject* val);
-PyObject* cExpr_repr(PyObject* self);
-int cExpr_init(PyObject* self, PyObject* args, PyObject*);
-
-extern PyTypeObject cExprType;
-
 #endif
