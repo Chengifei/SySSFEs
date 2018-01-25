@@ -3,9 +3,9 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -42,7 +42,8 @@ struct Expr {
         const char* data; /// raw data at users discretion
         Op* op;
     };
-    Expr() {}
+    Expr() : type(DATA) {}
+    explicit Expr(Expr::Op* o) : type(OP), op(o) {}
     Expr(const Expr&) = delete;
     Expr& operator=(const Expr&) = delete;
     Expr(Expr&& rhs) : type(rhs.type), data(rhs.data) {
@@ -62,7 +63,7 @@ struct Expr {
     }
 };
 
-struct Expr_const_postorder_iter : 
+struct Expr_const_postorder_iter :
     iter_utils::non_trivial_end_iter<Expr_const_postorder_iter> {
     std::stack<std::pair<const Expr*, std::size_t>> stack;
     const Expr* current;
@@ -92,6 +93,43 @@ struct Expr_const_postorder_iter :
         }
     }
     const Expr& operator*() const {
+        return *current;
+    }
+    bool exhausted() {
+        return !current;
+    }
+};
+
+struct Expr_postorder_iter :
+    iter_utils::non_trivial_end_iter<Expr_const_postorder_iter> {
+    std::stack<std::pair<Expr*, std::size_t>> stack;
+    Expr* current;
+    Expr_postorder_iter(Expr& expr)
+        : current(&expr) {
+        while (current->type < 0) {
+            stack.emplace(current, 0);
+            current = &current->op->args[0];
+        }
+    }
+    void operator++() {
+        if (stack.empty()) {
+            current = nullptr;
+            return;
+        }
+        if (stack.top().second + 1< stack.top().first->op->argc) {
+            ++current;
+            ++stack.top().second;
+            while (current->type < 0) {
+                stack.emplace(current, 0);
+                current = &current->op->args[0];
+            }
+        }
+        else {
+            current = stack.top().first;
+            stack.pop();
+        }
+    }
+    Expr& operator*() const {
         return *current;
     }
     bool exhausted() {
