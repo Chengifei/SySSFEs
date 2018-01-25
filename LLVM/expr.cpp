@@ -25,6 +25,7 @@
 #include <llvm/ADT/StringMap.h>
 #include <cstdlib>
 #include "operators.hpp"
+#include <operator_map.hpp>
 
 enum : long long {
     LLVM_CONST = 1,
@@ -32,6 +33,30 @@ enum : long long {
     OP = -1
 };
 
+op_info& get_op(const support::Expr& node) {
+    if (static_cast<NODE_TYPE>(node.type) == NODE_TYPE::FUNC) {
+        std::string name(std::move(*static_cast<std::string*>(node.op->op_data)));
+        delete static_cast<std::string*>(node.op->op_data);
+        // TODO
+    }
+    else {
+        switch (static_cast<OPCODE>(
+            reinterpret_cast<std::intptr_t>(node.op->op_data))) {
+            case OPCODE::PLUS:
+                return PLUS_OP;
+            case OPCODE::MINUS:
+                return MINUS_OP;
+            case OPCODE::MUL:
+                return MUL_OP;
+            case OPCODE::DIV:
+                return DIV_OP;
+            case OPCODE::POW:
+                return POW_OP;
+        }
+    }
+}
+
+// Make sure this function frees all memory allocated by parser.
 llvm::Function* codegen(llvm::LLVMContext& c, support::Expr& expr) {
     auto* dbl_tp = llvm::Type::getDoubleTy(c);
     llvm::StringMap<llvm::Argument*> args;
@@ -39,13 +64,16 @@ llvm::Function* codegen(llvm::LLVMContext& c, support::Expr& expr) {
     char* ptr;
     for (support::Expr& it : support::Expr_preorder_iter(expr))
         if (it.type >= 0) { // ignore operators
-            if (double d = std::strtod(it.data, &ptr); ptr != it.data) {
+            const std::string* str = reinterpret_cast<const std::string*>(it.data);
+            if (double d = std::strtod(str->c_str(), &ptr); ptr != str->c_str()) {
                 it.data = reinterpret_cast<char*>(llvm::ConstantFP::get(dbl_tp, d));
                 it.type = LLVM_CONST;
+                delete str; // agree with what has been done in the parser
             }
             else {
-                args.try_emplace(it.data, nullptr);
+                args.try_emplace(*str, nullptr); // this leave the actual arg uninitialized
                 it.type = LLVM_ARG;
+                // NOT DELETED, because we still need this to locate arg
             }
         }
 
@@ -56,25 +84,28 @@ llvm::Function* codegen(llvm::LLVMContext& c, support::Expr& expr) {
     llvm::BasicBlock* bb = llvm::BasicBlock::Create(c, "", func);
     std::vector<llvm::Value*> stack;
 
-    for (const support::Expr& it : support::Expr_const_postorder_iter(expr)) {
+    // we don't use a const iterator because we're deleting arg fields
+    for (const support::Expr& it : support::Expr_postorder_iter(expr)) {
         if (it.type < 0) {
-            op_info& info = *static_cast<op_info*>(it.op->op_data);
-            llvm::Instruction* ret = info.call(stack);
+            op_info& info = get_op(it);
+            llvm::Instruction* ret = info.call(stack, it.op->argc);
             bb->getInstList().push_back(ret);
-            stack.resize(stack.size() - it.op->argc);
             stack.push_back(ret); // Push the return value into stack
         }
         else if (it.type == LLVM_CONST)
             stack.push_back(reinterpret_cast<llvm::Value*>(const_cast<char*>(it.data)));
         else {
             llvm::Argument* arg;
-            if (auto pair = args.find(it.data); pair != args.end())
+            auto& name = *reinterpret_cast<const std::string*>(it.data);
+            if (auto pair = args.find(name);
+                pair != args.end() && pair->second) // make sure pair->second is initialized
                 arg = pair->second;
             else {
                 arg = arg_it++;
-                args[it.data] = arg;
+                pair->second = arg;
             }
             stack.push_back(arg);
+            delete &name;
         }
     }
     bb->getInstList().push_back(llvm::ReturnInst::Create(c, stack.back()));

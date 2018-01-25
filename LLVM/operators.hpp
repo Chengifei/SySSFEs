@@ -18,19 +18,26 @@
 
 #ifndef OPERATORS_HPP
 #define OPERATORS_HPP
-#include <llvm/ADT/APInt.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
+#include <vector>
 
 struct op_info {
     llvm::Function* impl;
-    llvm::CallInst* call(llvm::ArrayRef<llvm::Value*> args) {
+    llvm::CallInst* call(std::vector<llvm::Value*>& stack, unsigned argc) {
+        // FIXME: not efficient
+        std::vector<llvm::Value*> args(stack.end() - argc, stack.end());
+        stack.erase(stack.end() - argc, stack.end());
         return llvm::CallInst::Create(impl, args);
     }
 };
 
 extern op_info PLUS_OP;
+extern op_info MINUS_OP;
+extern op_info MUL_OP;
+extern op_info DIV_OP;
+extern op_info POW_OP;
 
 void init(llvm::LLVMContext& c, llvm::Module& m);
 #endif

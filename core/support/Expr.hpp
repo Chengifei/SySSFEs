@@ -25,8 +25,7 @@ namespace support {
 /// Expr does not assume the ownership of data
 struct Expr {
     enum : long long {
-        OP = -1,
-        DATA = 0
+        OP = -1
     };
     struct Op {
         const std::size_t argc;
@@ -42,7 +41,7 @@ struct Expr {
         const char* data; /// raw data at users discretion
         Op* op;
     };
-    Expr() : type(DATA) {}
+    Expr() : type(0) {}
     explicit Expr(Expr::Op* o) : type(OP), op(o) {}
     Expr(const Expr&) = delete;
     Expr& operator=(const Expr&) = delete;

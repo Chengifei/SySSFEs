@@ -16,7 +16,13 @@
 
 #ifndef OPMAP_HPP
 #define OPMAP_HPP
-enum OP {
+enum class NODE_TYPE : long long {
+    FUNC = -2,
+    OP = support::Expr::OP,
+    DATA = 0
+};
+
+enum class OPCODE : long long {
     PLUS = 0,
     MINUS,
     MUL,
