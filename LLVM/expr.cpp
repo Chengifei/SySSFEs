@@ -102,6 +102,7 @@ llvm::Function* codegen(llvm::LLVMContext& c, support::Expr& expr) {
                 arg = pair->second;
             else {
                 arg = arg_it++;
+                arg->setName(std::move(name));
                 pair->second = arg;
             }
             stack.push_back(arg);
