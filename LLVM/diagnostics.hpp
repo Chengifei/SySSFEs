@@ -18,35 +18,40 @@
 
 #ifndef DIAGNOSTICS_HPP
 #define DIAGNOSTICS_HPP
-#include <clang/Basic/Diagnostic.h>
-#include <clang/Basic/DiagnosticOptions.h>
-#include <clang/Frontend/TextDiagnosticPrinter.h>
-#include <llvm/Support/raw_ostream.h>
-#include <memory>
-
-class DiagCtl { // Simplified Clang Diagnostic Controller
-    llvm::raw_ostream& os;
-    std::unique_ptr<clang::DiagnosticsEngine> diag_engine;
+class DiagCtl {
 public:
-    DiagCtl(llvm::raw_ostream& os) : os(os) {
-        clang::DiagnosticOptions* diag_opt = new clang::DiagnosticOptions;
-        diag_opt->ShowColors = true;
-        clang::TextDiagnosticPrinter* tdp = new clang::TextDiagnosticPrinter(os, diag_opt);
-        clang::DiagnosticIDs* did(new clang::DiagnosticIDs);
-        diag_engine = std::make_unique<clang::DiagnosticsEngine>(did, diag_opt, tdp);
-    }
-    template <std::size_t N, typename... Ts>
-    void issue(const char(&fmt)[N], Ts&&... msgs) {
-        unsigned note = diag_engine->getCustomDiagID(clang::DiagnosticsEngine::Error, fmt);
-	clang::DiagnosticBuilder diag = diag_engine->Report(note);
-        diag_concat_impl(diag, std::forward<Ts&&>(msgs)...);
+    std::ostream& os;
+    bool show_color = true;
+    bool with_src_loc = true;
+    bool with_src = true;
+    bool with_caret = true;
+    bool absolute_path = false;
+    enum LEVEL {
+        REMARK = 0,
+        WARNING,
+        ERROR
+    };
+    constexpr static const char* header[3] {"Remark", "Warning", "Error"};
+    LEVEL mute;
+    DiagCtl(std::ostream& os) : os(os) {}
+    template <typename... Ts>
+    void issue(LEVEL l, const char* fmt, Ts&&... msgs) {
+        emit_type(WARNING);
+        char buf[1024];
+// FIXME: handle snprintf return value
+        snprintf(buf, 1024, fmt, std::forward<Ts&&>(msgs)...);
+	os << buf << "\n";
     }
 private:
-    template <typename T, typename... Ts>
-    void diag_concat_impl(clang::DiagnosticBuilder& diag, T&& arg1, Ts&&... args) {
-        diag << arg1;
-        diag_concat_impl(diag, std::forward<Ts&&>(args)...);
+    void emit_reset() {
+        if (show_color) os << "\x1b[0m";
     }
-    void diag_concat_impl(clang::DiagnosticBuilder& diag) {}
+    void emit_src();
+    void emit_type(LEVEL l) {
+        if (show_color)
+            os << "\x1b[31;1m" << header[l] << ": \x1b[0m";
+	else
+            os << header[l] << ": ";
+    }
 };
 #endif
