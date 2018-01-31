@@ -13,7 +13,11 @@
  * limitations under the License.
  */
 
+#ifndef TYPES_HPP
+#define TYPES_HPP
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/DerivedTypes.h>
 #include <support/type.hpp>
 
 llvm::Type* get_llvm_type(llvm::LLVMContext& c, const support::type& tp) {
@@ -30,3 +34,4 @@ llvm::Type* get_llvm_type(llvm::LLVMContext& c, const support::type& tp) {
         return llvm::ArrayType::get(base_tp, tp.agg);
     return base_tp;
 }
+#endif

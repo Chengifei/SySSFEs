@@ -27,17 +27,33 @@ class optimizer {
     llvm::FunctionAnalysisManager FAM;
     llvm::ModuleAnalysisManager MAM;
     llvm::LoopAnalysisManager LAM;
+    llvm::PassBuilder::OptimizationLevel o_level;
 public:
     optimizer(unsigned o_level, unsigned os_level) {
         pb.registerCGSCCAnalyses(CGAM);
         pb.registerModuleAnalyses(MAM);
         pb.registerFunctionAnalyses(FAM);
+        pb.registerLoopAnalyses(LAM);
         pb.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+        switch (o_level) {
+            case 0:
+                o_level = llvm::PassBuilder::OptimizationLevel::O0;
+                break;
+            case 1:
+                o_level = llvm::PassBuilder::OptimizationLevel::O1;
+                break;
+            case 2:
+                o_level = llvm::PassBuilder::OptimizationLevel::O2;
+                break;
+            case 3:
+                o_level = llvm::PassBuilder::OptimizationLevel::O3;
+                break;
+        }
     }
     void operator()(llvm::Module& M) {
-        llvm::PassManager<llvm::Module> MPM = pb.buildModuleOptimizationPipeline(llvm::PassBuilder::OptimizationLevel::O2);
+        llvm::PassManager<llvm::Module> MPM = pb.buildModuleOptimizationPipeline(o_level);
         MPM.run(M, MAM);
-        MPM = pb.buildModuleSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O2);
+        MPM = pb.buildModuleSimplificationPipeline(o_level);
         MPM.run(M, MAM);
     }
 };
