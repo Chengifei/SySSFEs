@@ -41,7 +41,7 @@ PyInit_support() {
     PyModule_AddObject(m, "cSrcLocation", reinterpret_cast<PyObject*>(&csrc_trackerType));
     PyOnly(PyType_Ready(&cTypesType), 0);
     PyOnly(PyType_Ready(&cTypesBaseEnum), 0);
-    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "DOUBLE", PyLong_FromLong(support::type::DOUBLE));
+    PyDict_SetItemString(cTypesBaseEnum.tp_dict, "REAL", PyLong_FromLong(support::type::REAL));
     PyDict_SetItemString(cTypesBaseEnum.tp_dict, "INT", PyLong_FromLong(support::type::INT));
     PyDict_SetItemString(cTypesBaseEnum.tp_dict, "BUFFER", PyLong_FromLong(support::type::BUFFER));
     PyDict_SetItemString(cTypesType.tp_dict, "BaseEnum", reinterpret_cast<PyObject*>(&cTypesBaseEnum));

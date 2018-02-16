@@ -19,12 +19,13 @@ namespace support {
 
 struct type {
     enum : char {
-        DOUBLE,
+        REAL,
         INT,
         BUFFER
     } base;
     bool is_const;
-    int agg;
+    char align;
+    unsigned agg;
 };
 
 }

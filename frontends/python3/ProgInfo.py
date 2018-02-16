@@ -319,11 +319,11 @@ class Space:
         self.objs = odict()
         self.watches = odict()
         self.globals = odict()
-        self.globals['step'] = Var(cTypes(cTypes.BaseEnum.DOUBLE, True, 0), 0.01)
+        self.globals['step'] = Var(cTypes(cTypes.BaseEnum.REAL, True, 0), 0.01)
         self.tmps = odict()
         self.rules = []
         self.loopctl = odict()
-        self.addLoopctl('t', cTypes.BaseEnum.DOUBLE, 0, 1)
+        self.addLoopctl('t', cTypes.BaseEnum.REAL, 0, 1)
         self.steps = None
 
     def addRule(self, rule, src=None):

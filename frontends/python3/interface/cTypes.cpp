@@ -30,7 +30,7 @@ PyObject* cTypes_cmp(PyObject* self, PyObject* rhs, int op) {
 PyObject* cTypes_getattr(PyObject* self, char* attr_name) {
     if (strcmp(attr_name, "base") == 0)
         switch (static_cast<cTypes*>(self)->type.base) {
-            case support::type::DOUBLE:
+            case support::type::REAL:
                 return PyUnicode_FromString("double");
             case support::type::INT:
                 return PyUnicode_FromString("int");
@@ -50,7 +50,7 @@ PyObject* cTypes_repr(PyObject* self) {
     cTypes& type = *static_cast<cTypes*>(self);
     char buf[32] {};
     switch (type.type.base) {
-        case support::type::DOUBLE:
+        case support::type::REAL:
             strcat(buf, "double");
             break;
         case support::type::INT:
@@ -74,7 +74,7 @@ Py_hash_t cTypes_hash(PyObject* self) {
 }
 
 int cTypes_init(PyObject* self, PyObject* args, PyObject*) {
-    decltype(support::type::DOUBLE) base;
+    decltype(support::type::REAL) base;
     unsigned is_const;
     int agg;
     if (!PyArg_ParseTuple(args, "IIi", &base, &is_const, &agg))
