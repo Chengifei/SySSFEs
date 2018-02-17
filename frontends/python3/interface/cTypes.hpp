@@ -24,9 +24,10 @@ struct cTypes : PyObject {
 typedef PyObject BaseEnum;
 
 PyObject* cTypes_cmp(PyObject* self, PyObject* rhs, int op);
-PyObject* cTypes_getattr(PyObject* self, char* attr_name);
+PyObject* cTypes_getattro(PyObject* self, PyObject* attr_name);
 PyObject* cTypes_repr(PyObject* self);
 Py_hash_t cTypes_hash(PyObject* self);
+PyObject* cTypes_to_C_type(PyObject* self, PyObject*);
 int cTypes_init(PyObject* self, PyObject* args, PyObject*);
 
 extern PyTypeObject cTypesType;

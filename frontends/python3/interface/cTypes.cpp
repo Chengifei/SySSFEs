@@ -27,8 +27,14 @@ PyObject* cTypes_cmp(PyObject* self, PyObject* rhs, int op) {
     return Py_NotImplemented;
 }
 
-PyObject* cTypes_getattr(PyObject* self, char* attr_name) {
-    if (strcmp(attr_name, "base") == 0)
+PyObject* cTypes_getattro(PyObject* self, PyObject* attr_name) {
+    if (PyObject* meth = _PyType_Lookup(&cTypesType, attr_name)) {
+        Py_INCREF(meth);
+        descrgetfunc f = meth->ob_type->tp_descr_get;
+        Py_DECREF(meth);
+        return f(meth, self, reinterpret_cast<PyObject*>(&cTypesType));
+    }
+    else if (PyUnicode_CompareWithASCIIString(attr_name, "base") == 0)
         switch (static_cast<cTypes*>(self)->type.base) {
             case support::type::REAL:
                 return PyUnicode_FromString("double");
@@ -37,9 +43,9 @@ PyObject* cTypes_getattr(PyObject* self, char* attr_name) {
             case support::type::BUFFER:
                 return PyUnicode_FromString("buf");
         }
-    else if (strcmp(attr_name, "qual") == 0)
+    else if (PyUnicode_CompareWithASCIIString(attr_name, "qual") == 0)
         return PyLong_FromLong(static_cast<cTypes*>(self)->type.is_const);
-    else if (strcmp(attr_name, "agg") == 0)
+    else if (PyUnicode_CompareWithASCIIString(attr_name, "agg") == 0)
         return PyLong_FromLong(static_cast<cTypes*>(self)->type.agg);
     PyErr_Format(PyExc_AttributeError,
                  "cTypes object has no attribute '%.400s'", attr_name);
@@ -76,12 +82,45 @@ Py_hash_t cTypes_hash(PyObject* self) {
 int cTypes_init(PyObject* self, PyObject* args, PyObject*) {
     decltype(support::type::REAL) base;
     unsigned is_const;
-    int agg;
-    if (!PyArg_ParseTuple(args, "IIi", &base, &is_const, &agg))
+    unsigned agg;
+    if (!PyArg_ParseTuple(args, "III", &base, &is_const, &agg))
         return -1;
-    new(&(static_cast<cTypes*>(self)->type)) support::type{base, static_cast<bool>(is_const), agg};
+    new(&(static_cast<cTypes*>(self)->type)) support::type{base, static_cast<bool>(is_const), -1, agg};
     return 0;
 }
+
+PyObject* cTypes_to_C_type(PyObject* self, PyObject*) {
+    cTypes& type = *static_cast<cTypes*>(self);
+    char tp[22] {};
+    if (type.type.is_const)
+        memcpy(tp, "const ", 6); // FIXME: Maintainence hell, strlen must agree
+    switch (type.type.base) {
+        case support::type::REAL:
+            strcat(tp, "double");
+            break;
+        case support::type::INT:
+            strcat(tp, "int");
+            break;
+        case support::type::BUFFER:
+            strcat(tp, "char");
+            break;
+    }
+    if (type.type.agg) {
+        // FIXME: Dynamic buffer
+        if (type.type.agg > 65536) // MAGIC NUMBER, ensure buffer size is enough
+            return nullptr; // But anyway this shouldn't fail
+        sprintf(tp + strlen(tp), " %%s[%i]", type.type.agg);
+    }
+    else {
+        sprintf(tp + strlen(tp), " %%s");
+    }
+    return PyUnicode_FromString(tp);
+}
+
+PyMethodDef Methods[] {
+        {"get_C_type", cTypes_to_C_type, METH_NOARGS, nullptr},
+        {nullptr}
+};
 
 PyTypeObject cTypesType {
         PyVarObject_HEAD_INIT(NULL, 0)
@@ -90,28 +129,28 @@ PyTypeObject cTypesType {
         0,                         /* tp_itemsize */
         call_destructor<cTypes>, /* tp_dealloc */
         0,                         /* tp_print */
-        cTypes_getattr,             /* tp_getattr */
+        0,                         /* tp_getattr */
         0,                         /* tp_setattr */
         0,                         /* tp_reserved */
-        cTypes_repr,                /* tp_repr */
+        cTypes_repr,               /* tp_repr */
         0,                         /* tp_as_number */
         0,                         /* tp_as_sequence */
         0,                         /* tp_as_mapping */
-        cTypes_hash,                /* tp_hash  */
+        cTypes_hash,               /* tp_hash  */
         0,                         /* tp_call */
         0,                         /* tp_str */
-        0,                         /* tp_getattro */
+        cTypes_getattro,           /* tp_getattro */
         0,                         /* tp_setattro */
         0,                         /* tp_as_buffer */
         Py_TPFLAGS_DEFAULT,        /* tp_flags */
         0,                         /* tp_doc */
         0,                         /* tp_traverse */
         0,                         /* tp_clear */
-        cTypes_cmp,                 /* tp_richcompare */
+        cTypes_cmp,                /* tp_richcompare */
         0,                         /* tp_weaklistoffset */
         0,                         /* tp_iter */
         0,                         /* tp_iternext */
-        0,                         /* tp_methods */
+        Methods,                   /* tp_methods */
         0,                         /* tp_members */
         0,                         /* tp_getset */
         0,                         /* tp_base */
