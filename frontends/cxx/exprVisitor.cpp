@@ -36,9 +36,10 @@ int exprVisitor::visitFunctionExpression(exprParser::FunctionExpressionContext* 
     support::Expr root(new support::Expr::Op(sz, name));
     auto it = ctx->children.cbegin() + 2;
     for (std::size_t i = 0; i != sz; ++i, it += 2) {
-        visitExpression(static_cast<exprParser::ExpressionContext *>(*it));
+        visitExpression(static_cast<exprParser::ExpressionContext*>(*it));
         root.op->args[i] = std::move(expr);
     }
+    expr = std::move(root);
 }
 
 int exprVisitor::visitPowExpression(exprParser::PowExpressionContext* ctx) {
@@ -79,6 +80,16 @@ int exprVisitor::visitExpression(exprParser::ExpressionContext* ctx) {
         visitMultiplicativeExpression(static_cast<exprParser::MultiplicativeExpressionContext*>(ctx->children[2]));
         root.op->args[1] = std::move(expr);
         expr = std::move(root);
+    }
+    else if (ctx->children.size() == 2) {
+        if (ctx->children[0]->getText() == "+")
+            return visitExpression(static_cast<exprParser::ExpressionContext*>(ctx->children[1]));
+        else {
+            support::Expr root(new support::Expr::Op(1, new std::string("neg")));
+            visitExpression(static_cast<exprParser::ExpressionContext*>(ctx->children[1]));
+            root.op->args[0] = std::move(expr);
+            expr = std::move(root);
+        }
     }
     else {
         visitMultiplicativeExpression(static_cast<exprParser::MultiplicativeExpressionContext*>(ctx->children[0]));

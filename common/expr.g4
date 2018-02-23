@@ -26,10 +26,12 @@ expression
     :   multiplicativeExpression
     |   expression '+' multiplicativeExpression
     |   expression '-' multiplicativeExpression
+    |   '-' expression
+    |   '+' expression
     ;
 
 Number
-    :   [0-9]+('.'[0-9]+)?
+    :   [0-9]+('.'[0-9]*)?
     ;
 
 Identifier
