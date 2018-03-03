@@ -4,9 +4,9 @@
 #include "exprLexer.h"
 #include "exprVisitor.h"
 
-support::Expr parse(const char* str) {
+support::Expr parse(std::string str) {
     using namespace antlr4;
-    std::stringstream s(str);
+    std::stringstream s(std::move(str));
     ANTLRInputStream input(s);
     exprLexer lexer(&input);
     CommonTokenStream tokens(&lexer);

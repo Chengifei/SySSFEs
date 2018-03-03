@@ -34,6 +34,7 @@ int exprVisitor::visitFunctionExpression(exprParser::FunctionExpressionContext* 
     // the last argument with comma
     std::size_t sz = (ctx->children.size() - 3 + 1) / 2;
     support::Expr root(new support::Expr::Op(sz, name));
+    root.type = static_cast<long long>(NODE_TYPE::FUNC);
     auto it = ctx->children.cbegin() + 2;
     for (std::size_t i = 0; i != sz; ++i, it += 2) {
         visitExpression(static_cast<exprParser::ExpressionContext*>(*it));
