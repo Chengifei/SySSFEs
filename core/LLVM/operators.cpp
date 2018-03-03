@@ -25,6 +25,7 @@ op_info MINUS_OP;
 op_info MUL_OP;
 op_info DIV_OP;
 op_info POW_OP;
+op_info DIFF_OP; // TODO
 
 void init(LLVMContext& c, Module& m) {
     Type* dbl_tp = Type::getDoubleTy(c);
@@ -73,4 +74,9 @@ void init(LLVMContext& c, Module& m) {
     bb->getInstList().push_back(ReturnInst::Create(c, div_ret));
     DIV_OP = op_info{div};
 }
+{
+    Function* pow = Function::Create(bin, GlobalVariable::ExternalLinkage, "pow", &m);
+    POW_OP = op_info{pow};
 }
+}
+

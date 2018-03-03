@@ -23,6 +23,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <algorithm>
 
 class object_node {
     llvm::LLVMContext& ctx;
@@ -34,8 +35,15 @@ public:
         mem_names.push_back(std::move(name));
         mem_types.push_back(get_llvm_type(ctx, tp));
     }
+    std::size_t get_mem_idx(const std::string& str) {
+        // FIXME: Handle not found cases, this is unsafe.
+        return std::find(mem_names.cbegin(), mem_names.cend(), str) - mem_names.cbegin();
+    }
     llvm::StructType* get_type() const {
-        return llvm::StructType::get(ctx, llvm::ArrayRef<llvm::Type*>(mem_types));
+        return llvm::StructType::get(ctx, mem_types);
+    }
+    llvm::PointerType* get_ptr_type() const {
+        return llvm::PointerType::getUnqual(get_type());
     }
 };
 #endif

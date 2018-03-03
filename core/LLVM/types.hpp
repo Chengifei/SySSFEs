@@ -20,13 +20,16 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <support/type.hpp>
 
-llvm::Type* get_llvm_type(llvm::LLVMContext& c, const support::type& tp) {
+// FIXME: Move this to correct place
+static llvm::Type* get_llvm_type(llvm::LLVMContext& c, const support::type& tp) {
     llvm::Type* base_tp = nullptr;
     switch (tp.base) {
-        case support::type::DOUBLE:
+        case support::type::REAL:
             base_tp = llvm::Type::getDoubleTy(c);
+            break;
         case support::type::INT:
             base_tp = llvm::Type::getInt64Ty(c);
+            break;
         case support::type::BUFFER:
             return nullptr;
     }

@@ -38,6 +38,7 @@ extern op_info MINUS_OP;
 extern op_info MUL_OP;
 extern op_info DIV_OP;
 extern op_info POW_OP;
+extern op_info DIFF_OP;
 
 void init(llvm::LLVMContext& c, llvm::Module& m);
 #endif
