@@ -20,7 +20,7 @@ int exprVisitor::visitUnit(exprParser::UnitContext* ctx) {
         std::string* data = new std::string(ctx->children[0]->getText());
         expr = support::Expr();
         expr.type = static_cast<long long>(NODE_TYPE::DATA);
-        expr.data = reinterpret_cast<const char*>(data);
+        expr.data = reinterpret_cast<char*>(data);
     }
     else if (ctx->functionExpression())
         visitFunctionExpression(static_cast<exprParser::FunctionExpressionContext*>(ctx->children[0]));

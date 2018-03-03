@@ -38,7 +38,7 @@ struct Expr {
     };
     long long type; /// negative type means has children
     union {
-        const char* data; /// raw data at users discretion
+        char* data; /// raw data at users discretion
         Op* op;
     };
     Expr() : type(0) {}
