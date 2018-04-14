@@ -11,9 +11,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This header creates a wrapper class for operators with underlying function,
- * which shall finally be optimized out. It shall be modified if doesn't.
  */
 
 #ifndef OPERATORS_HPP
@@ -21,15 +18,20 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
-#include <vector>
+#include <vector> 
+#include <support/Expr.hpp>
+#include "fcn_base.hpp"
 
 struct op_info {
-    llvm::Function* impl;
-    llvm::CallInst* call(std::vector<llvm::Value*>& stack, unsigned argc) {
-        // FIXME: not efficient
-        std::vector<llvm::Value*> args(stack.end() - argc, stack.end());
-        stack.erase(stack.end() - argc, stack.end());
-        return llvm::CallInst::Create(impl, args);
+    llvm::Instruction* (*impl)(llvm::Function*, std::vector<llvm::Value*>&, const fcn_base&);
+    void (*visitor)(fcn_base&, support::Expr::Op&) = nullptr;
+    static void init(llvm::LLVMContext& c, llvm::Module& m);
+    llvm::Instruction* call(llvm::Function* fcn, std::vector<llvm::Value*>& stack, const fcn_base& am) {
+        return impl(fcn, stack, am);
+    }
+    void visit(fcn_base& a, support::Expr::Op& o) {
+        if (visitor)
+            visitor(a, o);
     }
 };
 
@@ -39,6 +41,4 @@ extern op_info MUL_OP;
 extern op_info DIV_OP;
 extern op_info POW_OP;
 extern op_info DIFF_OP;
-
-void init(llvm::LLVMContext& c, llvm::Module& m);
 #endif

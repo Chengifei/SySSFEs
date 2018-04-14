@@ -13,14 +13,19 @@
  * limitations under the License.
  */
 
-#ifndef SUPPORT_VARIABLE_HPP
-#define SUPPORT_VARIABLE_HPP
-#include "type.hpp"
-namespace support {
+#ifndef VARIABLE_HPP
+#define VARIABLE_HPP
+#include <support/type.hpp>
 
-struct variable {
-    type t;
+struct Variable {
+    support::type tp;
+    const char* name;
+    void* value;
 };
 
-}
+struct CtrlVariable : Variable {
+    // value is used for start
+    void* step;
+    void* end;
+};
 #endif

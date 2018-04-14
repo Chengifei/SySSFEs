@@ -53,7 +53,7 @@ public:
     void operator()(llvm::Module& M) {
         llvm::PassManager<llvm::Module> MPM = pb.buildModuleOptimizationPipeline(o_level);
         MPM.run(M, MAM);
-        MPM = pb.buildModuleSimplificationPipeline(o_level);
+        MPM = pb.buildModuleSimplificationPipeline(o_level,  llvm::PassBuilder::ThinLTOPhase::PreLink);
         MPM.run(M, MAM);
     }
 };

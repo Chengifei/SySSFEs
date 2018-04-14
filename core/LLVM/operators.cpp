@@ -16,67 +16,68 @@
 #include "operators.hpp"
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
-#include <vector>
-
+#include "driver.hpp"
 using namespace llvm;
 
-op_info PLUS_OP;
-op_info MINUS_OP;
-op_info MUL_OP;
-op_info DIV_OP;
-op_info POW_OP;
-op_info DIFF_OP; // TODO
+Function* pow_func;
 
-void init(LLVMContext& c, Module& m) {
+static Instruction* plus_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {
+    auto ret = BinaryOperator::CreateFAdd(*(stack.end() - 2), *(--stack.end()));
+    stack.erase(stack.end() - 2, stack.end());
+    return ret;
+}
+
+static Instruction* minus_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {
+    auto ret = BinaryOperator::CreateFSub(*(stack.end() - 2), *(--stack.end()));
+    stack.erase(stack.end() - 2, stack.end());
+    return ret;
+}
+
+static Instruction* mul_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {
+    auto ret = BinaryOperator::CreateFMul(*(stack.end() - 2), *(--stack.end()));
+    stack.erase(stack.end() - 2, stack.end());
+    return ret;
+}
+
+static Instruction* div_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {
+    auto ret = BinaryOperator::CreateFDiv(*(stack.end() - 2), *(--stack.end()));
+    stack.erase(stack.end() - 2, stack.end());
+    return ret;
+}
+
+static Instruction* pow_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {
+    std::vector<Value*> args(stack.end() - 2, stack.end());
+    stack.erase(stack.end() - 2, stack.end());
+    return CallInst::Create(pow_func, args);
+}
+
+static void diff_visitor(fcn_base& arg, ::support::Expr::Op&) {
+    static_cast<function_builder&>(arg).request(ARG_REQ::HISTORY_ITERATOR_TO_SINGLE_FIELD);
+}
+
+static Instruction* diff_handler(llvm::Function* fcn, std::vector<Value*>&, const fcn_base& fb) {
+    fcn_info arg(fb, fcn);
+    auto iter_info = arg.get_iter();
+    Value* iter = iter_info.val;
+    Value* iprev = CallInst::Create(iter_info.info.dec, { iter }, "", &fcn->back());
+    Value* inext = CallInst::Create(iter_info.info.inc, { iter }, "", &fcn->back());
+    Value* vprev = CallInst::Create(iter_info.info.deref, { iprev }, "", &fcn->back());
+    Value* vnext = CallInst::Create(iter_info.info.deref, { inext }, "", &fcn->back());
+    Value* ydiff = BinaryOperator::CreateFSub(vnext, vprev, "", &fcn->back());
+}
+
+op_info PLUS_OP{plus_handler};
+op_info MINUS_OP{minus_handler};
+op_info MUL_OP{mul_handler};
+op_info DIV_OP{div_handler};
+op_info POW_OP{pow_handler};
+op_info DIFF_OP{diff_handler, diff_visitor};
+
+void op_info::init(LLVMContext& c, llvm::Module& m) {
+    // Requires types to be initialized first
+    // FIXME: enforce that
     Type* dbl_tp = Type::getDoubleTy(c);
     FunctionType* bin = FunctionType::get(dbl_tp, std::vector<Type*>(2, dbl_tp), false);
-{
-    Function* plus = Function::Create(bin, GlobalVariable::PrivateLinkage, "__plus_dbl", &m);
-    Argument* arg1 = plus->arg_begin();
-    Argument* arg2 = arg1 + 1;
-    BasicBlock* bb = BasicBlock::Create(c);
-    plus->getBasicBlockList().push_back(bb);
-    Instruction* plus_ret = BinaryOperator::CreateFAdd(arg1, arg2);
-    bb->getInstList().push_back(plus_ret);
-    bb->getInstList().push_back(ReturnInst::Create(c, plus_ret));
-    PLUS_OP = op_info{plus};
-}
-{
-    Function* minus = Function::Create(bin, GlobalVariable::PrivateLinkage, "__minus_dbl", &m);
-    Argument* arg1 = minus->arg_begin();
-    Argument* arg2 = arg1 + 1;
-    BasicBlock* bb = BasicBlock::Create(c);
-    minus->getBasicBlockList().push_back(bb);
-    Instruction* minus_ret = BinaryOperator::CreateFSub(arg1, arg2);
-    bb->getInstList().push_back(minus_ret);
-    bb->getInstList().push_back(ReturnInst::Create(c, minus_ret));
-    MINUS_OP = op_info{minus};
-}
-{
-    Function* mul = Function::Create(bin, GlobalVariable::PrivateLinkage, "__mul_dbl", &m);
-    Argument* arg1 = mul->arg_begin();
-    Argument* arg2 = arg1 + 1;
-    BasicBlock* bb = BasicBlock::Create(c);
-    mul->getBasicBlockList().push_back(bb);
-    Instruction* mul_ret = BinaryOperator::CreateFMul(arg1, arg2);
-    bb->getInstList().push_back(mul_ret);
-    bb->getInstList().push_back(ReturnInst::Create(c, mul_ret));
-    MUL_OP = op_info{mul};
-}
-{
-    Function* div = Function::Create(bin, GlobalVariable::PrivateLinkage, "__div_dbl", &m);
-    Argument* arg1 = div->arg_begin();
-    Argument* arg2 = arg1 + 1;
-    BasicBlock* bb = BasicBlock::Create(c);
-    div->getBasicBlockList().push_back(bb);
-    Instruction* div_ret = BinaryOperator::CreateFDiv(arg1, arg2);
-    bb->getInstList().push_back(div_ret);
-    bb->getInstList().push_back(ReturnInst::Create(c, div_ret));
-    DIV_OP = op_info{div};
-}
-{
-    Function* pow = Function::Create(bin, GlobalVariable::ExternalLinkage, "pow", &m);
-    POW_OP = op_info{pow};
-}
+    pow_func = Function::Create(bin, GlobalVariable::ExternalLinkage, "pow", &m);
 }
 

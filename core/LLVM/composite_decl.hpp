@@ -11,39 +11,36 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * This header defines corresponding structure for object in ATOM.
  */
 
-#ifndef OBJECT_HPP
-#define OBJECT_HPP
+#ifndef LLVM_COMPOSITE_DECL_HPP
+#define LLVM_COMPOSITE_DECL_HPP
 #include <vector>
 #include <string>
-#include "types.hpp"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <algorithm>
 
-class object_node {
-    llvm::LLVMContext& ctx;
+struct composite_decl_base {
     std::vector<std::string> mem_names;
-    std::vector<llvm::Type*> mem_types;
+    std::vector<support::type> mem_types;
+protected:
+    composite_decl_base() {}
+};
+
+class composite_decl : private composite_decl_base {
 public:
-    object_node(llvm::LLVMContext& ctx) : ctx(ctx) {}
-    void add(std::string&& name, const support::type& tp) {
+    void add(std::string&& name, support::type tp) {
         mem_names.push_back(std::move(name));
-        mem_types.push_back(get_llvm_type(ctx, tp));
+        mem_types.push_back(tp);
     }
-    std::size_t get_mem_idx(const std::string& str) {
+    std::size_t get_mem_idx(const std::string& str) const {
         // FIXME: Handle not found cases, this is unsafe.
         return std::find(mem_names.cbegin(), mem_names.cend(), str) - mem_names.cbegin();
     }
-    llvm::StructType* get_type() const {
-        return llvm::StructType::get(ctx, mem_types);
-    }
-    llvm::PointerType* get_ptr_type() const {
-        return llvm::PointerType::getUnqual(get_type());
+    const composite_decl_base& get() const {
+        return *this;
     }
 };
 #endif
