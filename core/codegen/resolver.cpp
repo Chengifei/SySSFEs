@@ -19,137 +19,126 @@
 #include <algorithm>
 #include <cstddef>
 #include <iter_utils.hpp>
-#include "rule_types.hpp"
+#include "resolver.hpp"
+#include <boost/container/flat_set.hpp>
 
-ResolvingOrder RuleResolver::get() {
-    return std::move(order);
+resolved_sequence RuleResolver::get() {
+    return std::move(sln);
 }
 
-template <typename T>
-struct VarStateDumper {
-    T b, e;
-    std::vector<char> update_states;
-    std::vector<char> start_states;
-    VarStateDumper(T b, T e): b(b), e(e) {
-        std::size_t sz = std::distance(b, e);
-        update_states.reserve(sz);
-        start_states.reserve(sz);
-        for (; b != e; ++b) {
-            update_states.push_back((*b)->updated);
-            start_states.push_back((*b)->as_start);
-        }
-    }
-    void release() noexcept {
-        b = e;
-    }
-    ~VarStateDumper() {
-        for (std::size_t i = 0; b != e; ++i, ++b) {
-            (*b)->updated = update_states[i];
-            (*b)->as_start = start_states[i];
-        }
+namespace std {
+template<>
+struct less<variable_designation> {
+    bool operator()(const variable_designation& l, const variable_designation& r) const {
+        return l.id < r.id || (l.id == r.id && l.order < r.order);
     }
 };
-
-struct ResolvingOrderDumper {
-    ResolvingOrder& o;
-    std::size_t sz;
-    ResolvingOrderDumper(ResolvingOrder& o): o(o), sz(o.size()) {}
-    void release() noexcept {
-        sz = o.size();
-    }
-    ~ResolvingOrderDumper() {
-        o.resize(sz);
-    }
-};
-
-struct start_selection : iter_utils::non_trivial_end_iter<start_selection> {
-    typedef std::vector<Variable*>::iterator iterator;
-    iterator _begin;
-    const iterator _end;
-    iterator cur = _begin;
-    start_selection(iterator begin, iterator end) :
-        _begin(begin), _end(end) {}
-    void operator++(){
-        if (cur == _end) {
-            for (iterator it = _begin; it != cur; ++it)
-                (*it)->as_start=false;
-            ++_begin;
-            (*_begin)->as_start = true;
-        }
-        else
-            (*cur++)->as_start = true;
-    }
-    bool exhausted() const {
-        return _begin == _end - 1 && cur == _end;
-    }
-    iter_utils::None operator*() const { return {}; }
-};
-
-bool RuleResolver::process() {
-    // to keep the system consistent:
-    // 1. the derivatives of the same variable must all be updated. (broadcast)
-    // 2. the last variable in an algebraic equation must be computed
-    //    once all the other variables are known.
-    // Choose starts ...
-    for (auto _ : start_selection(vars.begin(), vars.end())) {
-        VarStateDumper<std::vector<Variable*>::iterator> _v(vars.begin(), vars.end());
-        ResolvingOrderDumper _o(order);
-        // not broadcasting because we select starts only for alg eqns.
-        if (!alg_consistent())
-            continue;
-        // Check if all variables are solved
-        if (std::all_of(vars.begin(), vars.end(),
-            [](Variable* v) {return !v->need_update() || v->updated; })) {
-            _v.release();
-            _o.release();
-            return true;
-        }
-    }
-    return false;
 }
 
-int RuleResolver::broadcast(const Variable& exact, bool lenient_start) noexcept {
-    bool updated = false;
-    for (Variable* var : vars)
-        if (var->name() == exact.name()) {
-            if (var->updated && !lenient_start)
-                return BROADCAST_FAILED;
-            else {
-                updated = true;
-                var->updated = true;
+bool RuleResolver::solve() {
+    bool first = true;
+    // I strongly belive this should be cached.
+    std::size_t unresolved = std::count_if(pool.begin(), pool.end(),
+                                           [](variable v) { return v.needs_update(); });
+    while (unresolved) {
+        switch (alg_consistent(first)) {
+        case SUCCEEDED_AND_UPDATED:
+            break;
+        case SUCCEEDED_NONE_UPDATED:
+            // It might be possible that we have fewer equations than variables
+            // but still are able to solve the system. Here this is only for
+            // programmatical safety that unresolved shall not exceed size
+            // FIXME
+            if (pack.size() < unresolved)
+                return false;
+            for (auto& attempt : powerset(pack.size(), unresolved)) {
+                boost::container::flat_set<variable_designation> agg_unknowns;
+                agg_unknowns.reserve(attempt.size());
+                for (auto i : attempt) {
+                    for (const auto& v : pack[i]) {
+                        if (pool[v].needs_update()) {
+                            agg_unknowns.insert(v);
+                        }
+                    }
+                }
+                if (agg_unknowns.size() == attempt.size()) {
+                    for (const auto& var : agg_unknowns)
+                        pool[var].update();
+                    std::unique_ptr<Rule*[]> rules = std::make_unique<Rule*[]>(attempt.size());
+                    Rule** end = rules.get() + attempt.size();
+                    for (std::size_t i = 0; i != attempt.size(); ++i)
+                        rules[i] = pack.data() + attempt[i];
+                    std::unique_ptr<variable_designation[]> vars =
+                        std::make_unique<variable_designation[]>(agg_unknowns.size());
+                    std::copy(agg_unknowns.cbegin(), agg_unknowns.cend(), vars.get());
+                    sln.push_back(step{std::move(rules), end, std::move(vars)});
+                    break;
+                }
             }
-        }
-    return updated ? BROADCAST_SUCCEED_AND_UPDATED : BROADCAST_SUCCEED_NONE_UPDATED;
-}
-
-bool RuleResolver::alg_consistent(bool update_start) {
-    // save the current state, or the state might change while updating
-    std::vector<std::pair<Rule*, Variable*>> to_be_updated;
-    for (auto& rule : pack) {
-        Variable* unknown = nullptr;
-        for (auto var : rule) {
-            if (var->need_update() && !var->updated && !var->as_start) {
-                if (unknown)
-                    goto next_rule;
-                unknown = var;
-            }
-        }
-        if (unknown)
-            to_be_updated.emplace_back(&rule, unknown);
-next_rule:;
-    }
-    bool recurse = false;
-    for (const auto& update : to_be_updated) {
-        // recurse for the further variables
-        if (int ret = broadcast(*update.second, update_start); ret == BROADCAST_FAILED)
-             return false;
-        else if (ret == BROADCAST_SUCCEED_AND_UPDATED)
-             recurse = true;
-    }
-    for (const auto& rule : to_be_updated)
-        order.add_alg(rule.first, *rule.second);
-    if (recurse)
-        if (!alg_consistent(true))
+            break;
+        case FAILED:
             return false;
+        }
+        first = false;
+        std::size_t new_unresolved = std::count_if(pool.begin(), pool.end(),
+                                   [](variable v) { return v.needs_update(); });
+        if (new_unresolved != unresolved)
+            unresolved = new_unresolved;
+        else
+            return false;
+    }
     return true;
+}
+
+int RuleResolver::broadcast(const base_t& base) noexcept {
+    bool updated = false;
+    for (variable& var : iter_utils::as_array(pool.at(base)))
+        if (var.update())
+            updated = true;
+        else
+            return FAILED;
+    return updated ? SUCCEEDED_AND_UPDATED
+                   : SUCCEEDED_NONE_UPDATED;
+}
+
+int RuleResolver::alg_consistent(bool use_start) {
+    // save the current state, or the state might change while updating
+    std::vector<std::pair<Rule*, variable_designation>> to_be_updated;
+    for (auto& rule : pack) {
+        if (rule.enabled) {
+            const variable_designation* unknown = nullptr;
+            for (const auto& var : rule) {
+                const variable& state = pool[var];
+                if (state.needs_update() && !(use_start && state.initialized)) {
+                    if (unknown)
+                        goto next_rule;
+                    else
+                        unknown = &var;
+                }
+            }
+            to_be_updated.emplace_back(&rule, *unknown);
+        }
+    next_rule:;
+    }
+
+    if (to_be_updated.empty())
+        return SUCCEEDED_NONE_UPDATED;
+
+    for (const auto& update : to_be_updated) {
+        int ret = broadcast(update.second.id);
+        if (ret == FAILED)
+             return FAILED;
+    }
+
+    for (const auto& rule : to_be_updated) {
+        rule.first->enabled = false;
+        std::unique_ptr<Rule*[]> rules = std::make_unique<Rule*[]>(1);
+        std::unique_ptr<variable_designation[]> vars = std::make_unique<variable_designation[]>(1);
+        rules[0] = rule.first;
+        vars[0] = rule.second;
+        Rule** end = rules.get() + 1;
+        sln.push_back(step{ std::move(rules), end, std::move(vars) });
+    }
+
+    return SUCCEEDED_AND_UPDATED;
 }

@@ -15,45 +15,93 @@
 import gdb
 import re
 import sys
-sys.path.append('/usr/share/gcc-7.2.0/python/')
+sys.path.append('/usr/share/gcc-7.3.1/python/')
 import libstdcxx.v6.printers as cxxprinters
+from boost.flat_containers import FlatMap165Printer as BoostFlatMapBase
 import pdb
 
-class NVarPrinter:
+class variable_designationPrinter:
     def __init__(self, val):
-        self.name = val["_name"]
-        self.order = val["_order"]["_M_elems"]
-        self.properties = []
-        if val["_can_start"]:
-            self.properties.append("can_start")
-        if val["_need_update"]:
-            self.properties.append("need_update")
-        if val["updated"]:
-            self.properties.append("updated")
-        if val["as_start"]:
-            self.properties.append("starting")
+        self.id = val["id"]
+        self.order = val["order"]["_M_elems"]
 
     def to_string(self):
-        order=[self.order[i] for i in range(8)]
-        properties = ', '.join(self.properties)
-        return f'{self.name}{properties}({", ".join(str(int(i)) for i in order)})'
+        order=((str(i + 1), int(self.order[i])) for i in range(8))
+        prime = "'"
+        return f'<{self.id} [{" ".join(i + prime*j for i, j in order if j)}]>'
+
+class UpdatePairPrinter:
+    def __init__(self, val):
+        self.val = val
+
+    def to_string(self):
+        return str(self.val["first"].dereference()) + " " + str(self.val["second"])
+
+class PackedVarsPrinter:
+    def __init__(self, val):
+        self.order = cxxprinters.StdVectorPrinter("", val["orders"]).children()
+        self.var = cxxprinters.StdVectorPrinter("", val["states"]).children()
+
+    @staticmethod
+    def generator(it1, it2):
+        prime = "'"
+        for i, j in zip(it1, it2):
+            order = i[1]["_M_elems"]
+            order = [(str(i + 1), int(order[i])) for i in range(8)]
+            order = " ".join(i + prime*j for i, j in order if j)
+            if not order:
+                order = "base"
+            yield order, j[1]
+
+    def children(self):
+        return self.generator(self.order, self.var)
+
+    def to_string(self):
+        return 'packed_vars'
 
 class RulePrinter:
     def __init__(self, val):
-        self.vars = val["vars"]
-        self.unknowns = val["unknowns"]
+        self.val = val
+
+    def children(self):
+        vec = self.val[self.val.type.fields()[0]]
+        return cxxprinters.StdVectorPrinter("Rule", vec).children()
 
     def to_string(self):
-        printer=cxxprinters.Tr1UnorderedSetPrinter
-        vp = (str(val) for _, val in printer('', self.vars).children())
-        up = (str(val) for _, val in printer('', self.unknowns).children())
-        return f'Rule: vars{{{", ".join(vp)}}}, unknowns {{{", ".join(up)}}}'
+        if int(self.val["enabled"]):
+            return "Rule"
+        else:
+            return "*Rule*"
 
+    def display_hint(self):
+        return 'array'
+
+class SlnPrinter:
+    def __init__(self, val):
+        self.rule = val["rule"]['_M_t']['_M_t']['_M_head_impl']
+        self.rule_end = val["rule_end"]
+        self.vars = val["var"]['_M_t']['_M_t']['_M_head_impl']
+
+    def children(self):
+        while self.rule != self.rule_end:
+            yield str(self.vars.dereference()), self.rule.dereference().dereference()
+            self.rule += 1
+            self.vars += 1
+
+    def to_string(self):
+        return "step"
 
 def dispatcher(val):
-    type = val.type
-    if "Variable" == val.type.name:
-        return NVarPrinter(val)
+    if "step" == val.type.name:
+        return SlnPrinter(val)
+    elif "Rule" == val.type.name:
+        return RulePrinter(val)
+    elif "variable_designation" == val.type.name:
+        return variable_designationPrinter(val)
+    elif "std::pair<std::vector<variable_designation, std::allocator<variable_designation> >*, variable_designation>" == val.type.name:
+        return UpdatePairPrinter(val)
+    elif "variable_pool::packed_vars" == val.type.name:
+        return PackedVarsPrinter(val)
     return None
 
 
@@ -62,34 +110,38 @@ def ptrvec(val):
     return "{" + ", ".join(str(val.dereference()) for _, val in printer) + "}"
 
 
-class pvars(gdb.Command):
+class ppool(gdb.Command):
     def __init__(self):
         gdb.Command.__init__ (self,
-                              "pvars",
+                              "ppool",
                               gdb.COMMAND_DATA,
                               gdb.COMPLETE_EXPRESSION)
 
+    @staticmethod
+    def generator(it):
+        for _, i in it:
+            yield (i, next(it)[1])
 
     def invoke(self, args, from_tty):
-        val = gdb.parse_and_eval(args)
-        print(ptrvec(val))
+        val = gdb.parse_and_eval("pool.pool")
+        for key, val in self.generator(BoostFlatMapBase(val).children()):
+            print(key, val)
 
-pvars()
+ppool()
 
-class ppack(gdb.Command):
+class prules(gdb.Command):
     def __init__(self):
         gdb.Command.__init__ (self,
-                              "ppack",
+                              "prules",
                               gdb.COMMAND_DATA,
                               gdb.COMPLETE_EXPRESSION)
 
-
     def invoke(self, args, from_tty):
-        val = gdb.parse_and_eval(args)
+        val = gdb.parse_and_eval("pack")
         for _, val in cxxprinters.StdVectorPrinter("", val).children():
-            print(ptrvec(val))
+            print(val)
 
-ppack()
+prules()
 
 def register():
     gdb.pretty_printers.append(dispatcher)
