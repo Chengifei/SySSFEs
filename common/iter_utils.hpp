@@ -24,36 +24,32 @@
 
 namespace iter_utils {
 
-struct None {};
-
-template <class BI>
-struct hack_iterator {
-    BI& base_iterator;
-    explicit hack_iterator(BI& bi) : base_iterator(bi) {}
-    bool operator!=(None) const {
-        return !base_iterator.exhausted();
-    }
-    void operator++() {
-        ++base_iterator;
-    }
-    decltype(auto) operator*() {
-        return *base_iterator;
-    }
-};
-
 template <class T>
 class non_trivial_end_iter {
+    struct None {};
 public:
-    hack_iterator<T> begin() {
-        return hack_iterator<T>(*static_cast<T*>(this));
+    T& begin() {
+        return *static_cast<T*>(this);
     }
     None end() {
         return None();
     }
+    bool operator!=(None) {
+        return !static_cast<T*>(this)->exhausted();
+    }
+    decltype(auto) operator++() {
+        return static_cast<T*>(this)->operator++();
+    }
+    decltype(auto) operator*() {
+        return **static_cast<T*>(this);
+    }
+    decltype(auto) operator->() {
+        return &operator*();
+    }
 };
 
 template <typename T>
-auto as_array(std::pair<T, T> p) {
+auto as_array(const std::pair<T, T>& p) {
     struct _as_array {
         typedef decltype(*std::declval<T>()) ref_type;
         T _begin;
