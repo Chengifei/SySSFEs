@@ -19,6 +19,8 @@
 #include "driver.hpp"
 using namespace llvm;
 
+llvm::StringMap<op_info*> function_map{ {"diff", &DIFF_OP} };
+
 Function* pow_func;
 
 static Instruction* plus_handler(llvm::Function*, std::vector<Value*>& stack, const fcn_base&) {

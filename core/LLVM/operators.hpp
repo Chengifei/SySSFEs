@@ -18,20 +18,22 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/ADT/StringMap.h>
 #include <vector> 
 #include <support/Expr.hpp>
 #include "fcn_base.hpp"
+#include <codegen/resolver.hpp>
 
 struct op_info {
     llvm::Instruction* (*impl)(llvm::Function*, std::vector<llvm::Value*>&, const fcn_base&);
-    void (*visitor)(fcn_base&, support::Expr::Op&) = nullptr;
+    void (*visitor)(fcn_base&, support::Expr::Op&, const codegen::step&) = nullptr;
     static void init(llvm::LLVMContext& c, llvm::Module& m);
     llvm::Instruction* call(llvm::Function* fcn, std::vector<llvm::Value*>& stack, const fcn_base& am) {
         return impl(fcn, stack, am);
     }
-    void visit(fcn_base& a, support::Expr::Op& o) {
+    void visit(fcn_base& a, support::Expr::Op& o, const codegen::step& ctx) {
         if (visitor)
-            visitor(a, o);
+            visitor(a, o, ctx);
     }
 };
 
@@ -41,4 +43,6 @@ extern op_info MUL_OP;
 extern op_info DIV_OP;
 extern op_info POW_OP;
 extern op_info DIFF_OP;
+
+extern llvm::StringMap<op_info*> function_map;
 #endif

@@ -1,6 +1,5 @@
 /* Copyright 2017-2018 by Yifei Zheng
  *
- * Please avoid bare macro definition, and always use #define ABC (value).
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -14,19 +13,10 @@
  * limitations under the License.
  */
 
-#ifndef OPMAP_HPP
-#define OPMAP_HPP
-enum class NODE_TYPE : long long {
-    FUNC = -2,
-    OP = support::Expr::OP,
-    DATA = 0
-};
+#ifndef EXPR_VISITOR_HPP
+#define EXPR_VISITOR_HPP
+#include <exprParser.h>
+#include <support/Expr.hpp>
 
-enum class OPCODE : long long {
-    PLUS = 0,
-    MINUS,
-    MUL,
-    DIV,
-    POW
-};
+support::Expr visitExpression(exprParser::ExpressionContext* ctx);
 #endif

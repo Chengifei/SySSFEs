@@ -24,9 +24,8 @@
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Constants.h>
-#include <llvm/ADT/StringMap.h>
 #include "operators.hpp"
-#include <operator_map.hpp>
+#include "operator_map.hpp"
 #include "mangling.hpp"
 #include <algorithm>
 #include <numeric>
@@ -38,39 +37,6 @@ enum : long long {
     LLVM_ARG = 2,
     LLVM_MEM = 3,
     OP = -1
-};
-
-llvm::StringMap<op_info*> function_map{ {"diff", &DIFF_OP} };
-
-// CAUTION: THIS FUNCTION IS DESTRUCTIVE, ONE CALL ON A NODE ONLY
-static op_info& get_op(const support::Expr& node) {
-    if (static_cast<NODE_TYPE>(node.type) == NODE_TYPE::FUNC) {
-        std::string name(std::move(*static_cast<std::string*>(node.op->op_data)));
-        delete static_cast<std::string*>(node.op->op_data);
-        if (auto it = function_map.find(name); it != function_map.end())
-            return *it->second;
-        throw; // FIXME
-    }
-    else {
-        switch (static_cast<OPCODE>(
-            reinterpret_cast<std::intptr_t>(node.op->op_data))) {
-            case OPCODE::PLUS:
-                return PLUS_OP;
-            case OPCODE::MINUS:
-                return MINUS_OP;
-            case OPCODE::MUL:
-                return MUL_OP;
-            case OPCODE::DIV:
-                return DIV_OP;
-            case OPCODE::POW:
-                return POW_OP;
-        }
-    }
-}
-
-struct member_accessor {
-    std::string instn; // instance name
-    std::size_t fn; // field number
 };
 
 // Currently I don't have a good solution to enforce function calling
@@ -129,11 +95,8 @@ fcn_base Builder::pre_pass(support::Expr& expr) {
                 // NOT DELETED, because we still need this to locate arg
             }
         }
-        else {
-            op_info* op = &get_op(it); // GET_OP DELETES IT IF NEEDED
-            it.op->op_data = reinterpret_cast<char*>(op);
-            op->visit(args, *it.op);
-        }
+        else // if (it.type == static_cast<long long>(NODE_TYPE::OP))
+            static_cast<op_info*>(it.op->op_data)->visit(args, *it.op, ctx);
     return std::move(args);
 }
 
