@@ -62,14 +62,15 @@ struct Expr {
     }
 };
 
-struct Expr_const_postorder_iter :
-    iter_utils::non_trivial_end_iter<Expr_const_postorder_iter> {
-    std::stack<std::pair<const Expr*, std::size_t>> stack;
-    const Expr* current;
-    Expr_const_postorder_iter(const Expr& expr)
+template <typename T>
+struct Expr_postorder_iter_impl :
+    iter_utils::non_trivial_end_iter<Expr_postorder_iter_impl<T>> {
+    std::stack<T*, std::vector<T*>> stack;
+    T* current;
+    Expr_postorder_iter_impl(T& expr)
         : current(&expr) {
         while (current->type < 0) {
-            stack.emplace(current, 0);
+            stack.push(current);
             current = &current->op->args[0];
         }
     }
@@ -78,91 +79,59 @@ struct Expr_const_postorder_iter :
             current = nullptr;
             return;
         }
-        if (stack.top().second + 1< stack.top().first->op->argc) {
-            ++current;
-            ++stack.top().second;
+        ++current;
+        if (current - stack.top()->op->args.get() < stack.top()->op->argc) {
             while (current->type < 0) {
-                stack.emplace(current, 0);
+                stack.push(current);
                 current = &current->op->args[0];
             }
         }
         else {
-            current = stack.top().first;
+            current = stack.top();
             stack.pop();
         }
     }
-    const Expr& operator*() const {
+    T& operator*() const {
         return *current;
     }
-    bool exhausted() {
+    bool exhausted() const {
         return !current;
     }
 };
 
-struct Expr_postorder_iter :
-    iter_utils::non_trivial_end_iter<Expr_const_postorder_iter> {
-    std::stack<std::pair<Expr*, std::size_t>> stack;
-    Expr* current;
-    Expr_postorder_iter(Expr& expr)
-        : current(&expr) {
-        while (current->type < 0) {
-            stack.emplace(current, 0);
-            current = &current->op->args[0];
-        }
-    }
+typedef Expr_postorder_iter_impl<Expr> Expr_postorder_iter;
+typedef Expr_postorder_iter_impl<const Expr> Expr_const_postorder_iter;
+
+template <typename T>
+struct Expr_preorder_iter_impl :
+    iter_utils::non_trivial_end_iter<Expr_preorder_iter_impl<T>> {
+    T* const base;
+    T* current;
+    std::stack<T*, std::vector<T*>> stack;
+    Expr_preorder_iter_impl(Expr& expr) : base(&expr), current(&expr) {}
     void operator++() {
-        if (stack.empty()) {
-            current = nullptr;
-            return;
-        }
-        if (stack.top().second + 1< stack.top().first->op->argc) {
-            ++current;
-            ++stack.top().second;
-            while (current->type < 0) {
-                stack.emplace(current, 0);
-                current = &current->op->args[0];
-            }
+        if (current->type < 0) {
+            stack.push(current);
+            current = current->op->args.get();
         }
         else {
-            current = stack.top().first;
-            stack.pop();
+            ++current;
+            while (!stack.empty() && current - stack.top()->op->args.get() == stack.top()->op->argc) {
+                current = stack.top() + 1;
+                stack.pop();
+            }
         }
     }
-    Expr& operator*() const {
+    T& operator*() const {
         return *current;
     }
-    bool exhausted() {
-        return !current;
+    bool exhausted() const {
+        return current != base && stack.empty();
     }
 };
 
-struct Expr_preorder_iter :
-    iter_utils::non_trivial_end_iter<Expr_preorder_iter> {
-    std::stack<std::pair<Expr::Op*, std::size_t>> stack;
-    Expr* current;
-    Expr_preorder_iter(Expr& expr) : current(&expr) {
-        if (current->type < 0)
-            stack.emplace(current->op, 0);
-    }
-    void operator++() {
-        if (stack.empty()) {
-            current = nullptr;
-            return;
-        }
-        current = stack.top().first->args.get() + stack.top().second++;
-        if (current->type < 0)
-            stack.emplace(current->op, 0);
-        while (!stack.empty() && stack.top().second == stack.top().first->argc) {
-            stack.pop();
-        }
-    }
-    Expr& operator*() const {
-        return *current;
-    }
-    bool exhausted() {
-        return !current;
-    }
-};
+typedef Expr_preorder_iter_impl<Expr> Expr_preorder_iter;
+typedef Expr_preorder_iter_impl<const Expr> Expr_const_preorder_iter;
 
 }
 #endif
