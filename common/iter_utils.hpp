@@ -25,16 +25,14 @@
 namespace iter_utils {
 
 template <class T>
-class non_trivial_end_iter {
-    struct None {};
-public:
+struct non_trivial_end_iter {
     T& begin() {
         return *static_cast<T*>(this);
     }
-    None end() {
-        return None();
+    T& end() {
+        return *static_cast<T*>(this);
     }
-    bool operator!=(None) {
+    bool operator!=(const T&) {
         return !static_cast<T*>(this)->exhausted();
     }
     decltype(auto) operator++() {
@@ -49,26 +47,22 @@ public:
 };
 
 template <typename T>
-auto as_array(const std::pair<T, T>& p) {
-    struct _as_array {
-        typedef decltype(*std::declval<T>()) ref_type;
-        T _begin;
-        T _end;
-        ref_type operator[](int idx) const {
-            return *(_begin + idx);
-        }
-        std::size_t size() const {
-            return _end - _begin;
-        }
-        T begin() const {
-            return _begin;
-        }
-        T end() const {
-            return _end;
-        }
-    };
-    return _as_array{p.first, p.second};
-}
+struct array_view {
+    T* _begin;
+    T* _end;
+    T& operator[](int idx) const {
+        return *(_begin + idx);
+    }
+    std::size_t size() const {
+        return _end - _begin;
+    }
+    T* begin() const {
+        return _begin;
+    }
+    T* end() const {
+        return _end;
+    }
+};
 
 }
 
@@ -77,10 +71,30 @@ class range : public iter_utils::non_trivial_end_iter<range<T>> {
     T current;
     T terminal;
 public:
+    typedef T difference_type;
+    typedef T value_type;
+    typedef void pointer;
+    typedef T reference;
+    typedef std::is_integral<T> rand_acc;
+    typedef std::conditional<rand_acc::value, 
+        std::random_access_iterator_tag,
+        std::bidirectional_iterator_tag> iterator_category;
     range(T begin, T end) : current(begin), terminal(end) {}
     void operator++() {
         ++current;
     }
+    void operator--() {
+        --current;
+    }
+    typename std::enable_if<rand_acc::value, range&>::type operator+=(T t) {
+        current += t;
+        return *this;
+    }
+    typename std::enable_if<rand_acc::value, range&>::type operator-=(T t) {
+        current -= t;
+        return *this;
+    }
+    // TODO: Finish the random access iterator
     T operator*() {
         return current;
     }
