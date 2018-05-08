@@ -16,25 +16,60 @@
 #ifndef TEST_FRAMEWORK_HPP
 #define TEST_FRAMEWORK_HPP
 #include <iostream>
+#include <sstream>
+#include <fstream>
 #include <utility>
 #include <chrono>
+
+struct make_location {
+    const char* func;
+    int lineno;
+    std::string operator()() const {
+        std::ostringstream ss;
+        ss << "at " << func << ": " << lineno;
+        return ss.str();
+    }
+};
+
+struct read_line {
+    const char* file;
+    int lineno;
+    std::string operator()() const {
+        std::string ret;
+        std::ifstream f(file);
+        for (int lineno = this->lineno; lineno != 1; --lineno)
+            f.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::getline(f, ret);
+        return ret;
+    }
+};
 
 class TestFailed {
 public:
     TestFailed() {
         std::cerr << "TEST FAILED\n";
     }
-    template <class... Args>
+    template <typename... Args>
     TestFailed(Args&&... args) {
         std::cerr << "TEST FAILED: ";
-        print_variadic(std::forward<Args>(args)...);
+        print_variadic(std::forward<Args&&>(args)...);
         std::cerr << "\n";
     }
 private:
-    template <class T, class... Args>
+    template <typename T, typename... Args>
     void print_variadic(T t, Args&&... args) {
         std::cerr << t;
-        print_variadic(std::forward<Args>(args)...);
+        print_variadic(std::forward<Args&&>(args)...);
+    }
+    template <typename... Args>
+    void print_variadic(const make_location& loc, Args&&... args) {
+        std::cerr << loc();
+        print_variadic(std::forward<Args&&>(args)...);
+    }
+    template <typename... Args>
+    void print_variadic(const read_line& l, Args&&... args) {
+        std::cerr << l();
+        print_variadic(std::forward<Args&&>(args)...);
     }
     void print_variadic() noexcept {}
 };
@@ -51,33 +86,33 @@ struct ScopedTimer {
     }
 };
 
-template <typename T, typename U, class... Args>
+template <typename T, typename U, typename... Args>
 inline void EXPECT_EQ(const T& a, const U& b, Args&&... args) {
     if (a == b)
         ;
     else
-        throw TestFailed(__FUNCTION__, " ", a, " == ", b, std::forward<Args>(args)...);
+        throw TestFailed(__FUNCTION__, " ", a, " != ", b, " ", std::forward<Args>(args)...);
 }
 
-template <typename T, typename U, class... Args>
+template <typename T, typename U, typename... Args>
 inline void EXPECT_NEQ(const T& a, const U& b, Args&&... args) {
     if (a != b)
         ;
     else
-        throw TestFailed(__FUNCTION__, " ", a, " == ", b, std::forward<Args>(args)...);
+        throw TestFailed(__FUNCTION__, " ", a, " == ", b, " ", std::forward<Args>(args)...);
 }
 
-template <typename T, typename U, class... Args>
+template <typename T, typename... Args>
 inline void EXPECT_TRUE(const T& a, Args&&... args) {
     if (a)
         ;
     else
-        throw TestFailed(__FUNCTION__, " ", a, std::forward<Args>(args)...);
+        throw TestFailed(__FUNCTION__, " ", std::forward<Args>(args)...);
 }
 
-template <typename T, typename U, class... Args>
+template <typename T, typename... Args>
 inline void EXPECT_FALSE(const T& a, Args&&... args) {
     if (a)
-        throw TestFailed(__FUNCTION__, " ", a, std::forward<Args>(args)...);
+        throw TestFailed(__FUNCTION__, " ", std::forward<Args>(args)...);
 }
 #endif
