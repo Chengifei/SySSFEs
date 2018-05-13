@@ -20,8 +20,11 @@
 #include <fstream>
 #include <utility>
 #include <chrono>
+#include <type_traits>
 
-struct make_location {
+struct call_when_print {};
+
+struct make_location : call_when_print {
     const char* func;
     int lineno;
     std::string operator()() const {
@@ -31,7 +34,7 @@ struct make_location {
     }
 };
 
-struct read_line {
+struct read_line : call_when_print {
     const char* file;
     int lineno;
     std::string operator()() const {
@@ -57,18 +60,13 @@ public:
     }
 private:
     template <typename T, typename... Args>
-    void print_variadic(T t, Args&&... args) {
-        std::cerr << t;
+    typename std::enable_if<!std::is_base_of<call_when_print, T>::value>::type print_variadic(T&& t, Args&&... args) {
+        std::cerr << std::forward<T&&>(t);
         print_variadic(std::forward<Args&&>(args)...);
     }
-    template <typename... Args>
-    void print_variadic(const make_location& loc, Args&&... args) {
-        std::cerr << loc();
-        print_variadic(std::forward<Args&&>(args)...);
-    }
-    template <typename... Args>
-    void print_variadic(const read_line& l, Args&&... args) {
-        std::cerr << l();
+    template <typename T, typename... Args>
+    typename std::enable_if<std::is_base_of<call_when_print, T>::value>::type print_variadic(const T& func, Args&&... args) {
+        std::cerr << func();
         print_variadic(std::forward<Args&&>(args)...);
     }
     void print_variadic() noexcept {}
@@ -82,7 +80,7 @@ struct ScopedTimer {
     }
     ~ScopedTimer() {
         std::cout << (double) std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::high_resolution_clock::now() - start).count() << "\n";
+                        std::chrono::high_resolution_clock::now() - start).count() << " ms\n";
     }
 };
 
@@ -102,16 +100,16 @@ inline void EXPECT_NEQ(const T& a, const U& b, Args&&... args) {
         throw TestFailed(__FUNCTION__, " ", a, " == ", b, " ", std::forward<Args>(args)...);
 }
 
-template <typename T, typename... Args>
-inline void EXPECT_TRUE(const T& a, Args&&... args) {
+template <typename... Args>
+inline void EXPECT_TRUE(bool a, Args&&... args) {
     if (a)
         ;
     else
         throw TestFailed(__FUNCTION__, " ", std::forward<Args>(args)...);
 }
 
-template <typename T, typename... Args>
-inline void EXPECT_FALSE(const T& a, Args&&... args) {
+template <typename... Args>
+inline void EXPECT_FALSE(bool a, Args&&... args) {
     if (a)
         throw TestFailed(__FUNCTION__, " ", std::forward<Args>(args)...);
 }
