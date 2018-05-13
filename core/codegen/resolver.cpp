@@ -18,21 +18,22 @@
 #include <utility>
 #include <algorithm>
 #include <cstddef>
-#include <iter_utils.hpp>
 #include "resolver.hpp"
 #include <boost/container/flat_set.hpp>
 
-resolved_sequence RuleResolver::get() {
-    return std::move(sln);
-}
-
 namespace std {
 template<>
-struct less<variable_designation> {
-    bool operator()(const variable_designation& l, const variable_designation& r) const {
+struct less<support::variable_designation> {
+    bool operator()(const support::variable_designation& l, const support::variable_designation& r) const {
         return l.id < r.id || (l.id == r.id && l.order < r.order);
     }
 };
+}
+
+namespace codegen {
+
+resolved_sequence RuleResolver::get() {
+    return std::move(sln);
 }
 
 bool RuleResolver::solve() {
@@ -52,7 +53,7 @@ bool RuleResolver::solve() {
             if (pack.size() < unresolved)
                 return false;
             for (auto& attempt : powerset(pack.size(), unresolved)) {
-                boost::container::flat_set<variable_designation> agg_unknowns;
+                boost::container::flat_set<support::variable_designation> agg_unknowns;
                 agg_unknowns.reserve(attempt.size());
                 for (auto i : attempt) {
                     for (const auto& v : pack[i]) {
@@ -64,12 +65,12 @@ bool RuleResolver::solve() {
                 if (agg_unknowns.size() == attempt.size()) {
                     for (const auto& var : agg_unknowns)
                         pool[var].update();
-                    std::unique_ptr<Rule*[]> rules = std::make_unique<Rule*[]>(attempt.size());
-                    Rule** end = rules.get() + attempt.size();
+                    std::unique_ptr<std::size_t[]> rules = std::make_unique<std::size_t[]>(attempt.size());
+                    std::size_t* end = rules.get() + attempt.size();
                     for (std::size_t i = 0; i != attempt.size(); ++i)
-                        rules[i] = pack.data() + attempt[i];
-                    std::unique_ptr<variable_designation[]> vars =
-                        std::make_unique<variable_designation[]>(agg_unknowns.size());
+                        rules[i] = attempt[i];
+                    std::unique_ptr<support::variable_designation[]> vars =
+                        std::make_unique<support::variable_designation[]>(agg_unknowns.size());
                     std::copy(agg_unknowns.cbegin(), agg_unknowns.cend(), vars.get());
                     sln.push_back(step{std::move(rules), end, std::move(vars)});
                     break;
@@ -90,9 +91,9 @@ bool RuleResolver::solve() {
     return true;
 }
 
-int RuleResolver::broadcast(const base_t& base) noexcept {
+int RuleResolver::broadcast(const support::base_t& base) noexcept {
     bool updated = false;
-    for (variable& var : iter_utils::as_array(pool.at(base)))
+    for (variable& var : pool.at(base))
         if (var.update())
             updated = true;
         else
@@ -103,10 +104,10 @@ int RuleResolver::broadcast(const base_t& base) noexcept {
 
 int RuleResolver::alg_consistent(bool use_start) {
     // save the current state, or the state might change while updating
-    std::vector<std::pair<Rule*, variable_designation>> to_be_updated;
+    std::vector<std::pair<Rule*, support::variable_designation>> to_be_updated;
     for (auto& rule : pack) {
         if (rule.enabled) {
-            const variable_designation* unknown = nullptr;
+            const support::variable_designation* unknown = nullptr;
             for (const auto& var : rule) {
                 const variable& state = pool[var];
                 if (state.needs_update() && !(use_start && state.initialized)) {
@@ -132,13 +133,15 @@ int RuleResolver::alg_consistent(bool use_start) {
 
     for (const auto& rule : to_be_updated) {
         rule.first->enabled = false;
-        std::unique_ptr<Rule*[]> rules = std::make_unique<Rule*[]>(1);
-        std::unique_ptr<variable_designation[]> vars = std::make_unique<variable_designation[]>(1);
-        rules[0] = rule.first;
+        std::unique_ptr<std::size_t[]> rules = std::make_unique<std::size_t[]>(1);
+        std::unique_ptr<support::variable_designation[]> vars = std::make_unique<support::variable_designation[]>(1);
+        rules[0] = rule.first - &*pack.begin();
         vars[0] = rule.second;
-        Rule** end = rules.get() + 1;
+        std::size_t* end = rules.get() + 1;
         sln.push_back(step{ std::move(rules), end, std::move(vars) });
     }
 
     return SUCCEEDED_AND_UPDATED;
+}
+
 }

@@ -17,21 +17,15 @@
 
 #ifndef RULE_TYPES_HPP
 #define RULE_TYPES_HPP
-#include <cstdint>
+#include <support/variable.hpp>
 #include <cstddef>
 #include <vector>
-#include <array>
 #include <memory>
 #include <algorithm>
 #include <boost/container/flat_map.hpp>
+#include <iter_utils.hpp>
 
-typedef std::array<std::uint8_t, 8> order_t;
-typedef std::size_t base_t;
-
-struct variable_designation {
-    base_t id;
-    order_t order;
-};
+namespace codegen {
 
 class variable {
     bool need_update = true;
@@ -50,32 +44,32 @@ public:
     }
 };
 
-struct Rule : std::vector<variable_designation> {
+struct Rule : std::vector<support::variable_designation> {
     bool enabled = true;
-    using std::vector<variable_designation>::vector;
+    using std::vector<support::variable_designation>::vector;
 };
 
 struct step {
-    std::unique_ptr<Rule*[]> rule;
-    Rule** rule_end;
-    std::unique_ptr<variable_designation[]> var;
+    std::unique_ptr<std::size_t[]> rule;
+    std::size_t* rule_end;
+    std::unique_ptr<support::variable_designation[]> var;
 };
 
 typedef std::vector<step> resolved_sequence;
 
 struct variable_pool {
-    typedef variable_designation key_type;
+    typedef support::variable_designation key_type;
     typedef variable mapped_type;
 private:
     struct packed_vars {
-        std::vector<order_t> orders;
+        std::vector<support::order_t> orders;
         std::vector<variable> states;
-        variable& operator[](const order_t& o) {
+        variable& operator[](const support::order_t& o) {
             return *(states.begin() +
                 (std::find(orders.cbegin(), orders.cend(), o) - orders.cbegin()));
         }
         template <typename... T>
-        bool add(order_t o, T&&... args) {
+        bool add(support::order_t o, T&&... args) {
             auto it = std::find(orders.cbegin(), orders.cend(), o);
             if (it != orders.cend())
                 return false; // for debugging, assert the two values are the same
@@ -84,19 +78,18 @@ private:
             return true;
         }
     };
-    typedef boost::container::flat_map<base_t, packed_vars> pool_t;
+    typedef boost::container::flat_map<support::base_t, packed_vars> pool_t;
     pool_t pool;
 public:
-    variable& operator[](const variable_designation& v) {
+    variable& operator[](const support::variable_designation& v) {
         return pool[v.id][v.order];
     }
-    std::pair<std::vector<variable>::iterator, std::vector<variable>::iterator>
-    at(base_t base) {
+    iter_utils::array_view<variable> at(support::base_t base) {
         std::vector<variable>& all = pool.at(base).states;
-        return std::make_pair(all.begin(), all.end());
+        return {&*all.begin(), &*all.end()};
     }
     template <typename... T>
-    bool add(const variable_designation& v, T&&... args) {
+    bool add(const support::variable_designation& v, T&&... args) {
         auto it = pool.find(v.id);
         if (it != pool.cend())
             return it->second.add(v.order, std::forward<T&&>(args)...);
@@ -152,12 +145,12 @@ public:
 
 class RuleResolver {
 private:
-    // std::vector<std::unique_ptr<variable>> vars;
     variable_pool& pool;
-    std::vector<Rule>& pack;
+    iter_utils::array_view<Rule> pack;
     resolved_sequence sln;
 public:
-    RuleResolver(variable_pool& pool, std::vector<Rule>& pack) : pool(pool), pack(pack) {}
+    RuleResolver(variable_pool& p, Rule* rbegin, Rule* rend)
+        : pool(p), pack{rbegin, rend} {}
     resolved_sequence get();
     bool solve();
 private:
@@ -168,6 +161,8 @@ private:
     };
     /// The function may fail, and return false on fail.
     int alg_consistent(bool);
-    int broadcast(const base_t&) noexcept;
+    int broadcast(const support::base_t&) noexcept;
 };
+
+}
 #endif

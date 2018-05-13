@@ -1,4 +1,4 @@
-/* Copyright 2017-2018 by Yifei Zheng
+/* Copyright 2018 by Yifei Zheng
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,21 @@
  * limitations under the License.
  */
 
-#ifndef VARIABLE_HPP
-#define VARIABLE_HPP
-#include <support/type.hpp>
+#ifndef CTRL_VARIABLE_HPP
+#define CTRL_VARIABLE_HPP
+#include "type.hpp"
+#include <type_traits>
 
-struct Variable {
+namespace support {
+
+typedef std::integral_constant<std::size_t, 8> ctrl_size;
+
+struct CtrlVariable {
     support::type tp;
-    const char* name;
-    void* value;
-};
-
-struct CtrlVariable : Variable {
-    // value is used for start
+    void* start;
     void* step;
     void* end;
 };
+
+}
 #endif
