@@ -2,9 +2,19 @@ grammar expr;
 
 unit
     :   Identifier
-    |   Number
+    |   combIdent
+    |   memIdent
+    |   number
     |   '(' expression ')'
     |   functionExpression
+    ;
+
+combIdent
+    :   '$' Integer '.' Identifier
+    ;
+
+memIdent
+    :   '$' Identifier '.' Identifier
     ;
 
 functionExpression
@@ -30,13 +40,16 @@ expression
     |   '+' expression
     ;
 
-Number
-    :   [0-9]+('.'[0-9]*)?
+number
+    :   Integer ('.' Integer?)?
+    ;
+
+Integer
+    :   [0-9]+
     ;
 
 Identifier
     :   [a-zA-Z][a-zA-Z0-9_]*
-    |   '$' Identifier|Number '.' Identifier
     ;
 
 Whitespace
