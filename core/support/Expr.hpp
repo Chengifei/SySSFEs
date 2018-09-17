@@ -17,9 +17,11 @@
 
 #ifndef SUPPORT_EXPR_HPP
 #define SUPPORT_EXPR_HPP
-#include <memory>
 #include <iter_utils.hpp>
+#include <vector>
 #include <stack>
+#include <cassert>
+
 namespace support {
 
 /// Expr does not assume the ownership of data
@@ -28,12 +30,11 @@ struct Expr {
         OP = -1
     };
     struct Op {
-        const std::size_t argc;
         void* op_data;
-        std::unique_ptr<Expr[]> args;
+        std::vector<Expr> args;
         Op(std::size_t argc, void* op_data)
-            : argc(argc), op_data(op_data) {
-            args = std::make_unique<Expr[]>(argc);
+            : op_data(op_data) {
+            args.resize(argc);
         }
     };
     long long type; /// negative type means has children
@@ -80,7 +81,7 @@ struct Expr_postorder_iter_impl :
             return;
         }
         ++current;
-        if (current - stack.top()->op->args.get() < stack.top()->op->argc) {
+        if (current - stack.top()->op->args.data() < stack.top()->op->args.size()) {
             while (current->type < 0) {
                 stack.push(current);
                 current = &current->op->args[0];
@@ -108,15 +109,15 @@ struct Expr_preorder_iter_impl :
     T* const base;
     T* current;
     std::stack<T*, std::vector<T*>> stack;
-    Expr_preorder_iter_impl(Expr& expr) : base(&expr), current(&expr) {}
+    Expr_preorder_iter_impl(T& expr) : base(&expr), current(&expr) {}
     void operator++() {
         if (current->type < 0) {
             stack.push(current);
-            current = current->op->args.get();
+            current = current->op->args.data();
         }
         else {
             ++current;
-            while (!stack.empty() && current - stack.top()->op->args.get() == stack.top()->op->argc) {
+            while (!stack.empty() && current - stack.top()->op->args.data() == stack.top()->op->args.size()) {
                 current = stack.top() + 1;
                 stack.pop();
             }
@@ -133,5 +134,53 @@ struct Expr_preorder_iter_impl :
 typedef Expr_preorder_iter_impl<Expr> Expr_preorder_iter;
 typedef Expr_preorder_iter_impl<const Expr> Expr_const_preorder_iter;
 
+/// Allows RAII functors to be applied in a recursion-like fashion
+template <typename T, class F>
+struct Expr_custom_iter_impl :
+    iter_utils::non_trivial_end_iter<Expr_preorder_iter_impl<T>> {
+    T* const base;
+    T* current;
+    std::stack<T*, std::vector<T*>> stack;
+    std::stack<T*, std::vector<T*>> estack;
+    std::stack<F, std::vector<F>> fstack;
+    Expr_custom_iter_impl(T& expr) : base(&expr), current(&expr) {}
+    void operator++() {
+        if (current->type < 0) {
+            stack.push(current);
+            current = current->op->args.data();
+        }
+        else {
+            ++current;
+            while (!stack.empty() && current - stack.top()->op->args.data() == stack.top()->op->args.size()) {
+                if (!estack.empty() && stack.top() == estack.top()) {
+                    fstack.pop();
+                    estack.pop();
+                }
+                current = stack.top() + 1;
+                stack.pop();
+            }
+        }
+    }
+    T& operator*() const {
+        return *current;
+    }
+    bool exhausted() const {
+        return current != base && stack.empty();
+    }
+    template <typename... A>
+    void emplace(A&&... args) {
+        assert(current->type < 0);
+        estack.push(current);
+        fstack.emplace(std::forward<A&&>(args)...);
+    }
+};
+
+template <class T>
+using Expr_custom_iter = Expr_custom_iter_impl<Expr, T>;
+template <class T>
+using Expr_custom_const_iter = Expr_custom_iter_impl<const Expr, T>;
+
+typedef Expr_preorder_iter Expr_fast_iter; // FIXME: Placeholder typedef
+typedef Expr_const_preorder_iter Expr_fast_const_iter;
 }
 #endif
