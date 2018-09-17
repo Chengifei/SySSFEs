@@ -12,45 +12,46 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  *
- * This header encapsulates clang diagnostic issuing and propagating
- * mechanism.
+ * This header encapsulates diagnostic issuing and propagating mechanism.
  */
 
 #ifndef DIAGNOSTICS_HPP
 #define DIAGNOSTICS_HPP
+#include <ostream>
+#include <vector>
+#include <cstdio>
+
 class DiagCtl {
 public:
     std::ostream& os;
     bool show_color = true;
-    bool with_src_loc = true;
-    bool with_src = true;
-    bool with_caret = true;
+    bool show_src = true;
+    bool show_carets = true;
     bool absolute_path = false;
     enum LEVEL {
         REMARK = 0,
         WARNING,
         ERROR
     };
-    constexpr static const char* header[3] {"Remark", "Warning", "Error"};
+    static const char* header[3];
     LEVEL mute;
     DiagCtl(std::ostream& os) : os(os) {}
     template <typename... Ts>
     void issue(LEVEL l, const char* fmt, Ts&&... msgs) {
-        emit_type(WARNING);
-        char buf[1024];
-// FIXME: handle snprintf return value
-        snprintf(buf, 1024, fmt, std::forward<Ts&&>(msgs)...);
-	os << buf << "\n";
+        emit_type(l);
+        std::vector<char> buf(std::snprintf(nullptr, 0, fmt, std::forward<Ts&&>(msgs)...));
+        std::snprintf(buf.data(), buf.size(), fmt, std::forward<Ts&&>(msgs)...);
+        os << buf.data() << "\n";
     }
 private:
     void emit_reset() {
         if (show_color) os << "\x1b[0m";
     }
-    void emit_src();
+    void emit_src(const char* fn, std::size_t ln, int col_b, int col_e);
     void emit_type(LEVEL l) {
         if (show_color)
             os << "\x1b[31;1m" << header[l] << ": \x1b[0m";
-	else
+        else
             os << header[l] << ": ";
     }
 };

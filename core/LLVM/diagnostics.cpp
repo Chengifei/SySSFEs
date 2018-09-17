@@ -12,26 +12,5 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef LLVM_TYPE_CACHE_HPP
-#define LLVM_TYPE_CACHE_HPP
-#include <llvm/IR/DerivedTypes.h>
-#include <llvm/IR/Function.h>
-
-struct type_cache {
-    llvm::StructType* obj;
-    struct iterator_type {
-        llvm::Type* tp;
-        llvm::Function* inc;
-        llvm::Function* dec;
-        llvm::Function* deref;
-    } iter;
-    struct combination_type {
-        llvm::Type* tp;
-        llvm::Function* inc;
-    } comb;
-    typedef llvm::StructType* chunk_type;
-    chunk_type chunk;
-};
-
-#endif
+#include "diagnostics.hpp"
+const char* DiagCtl::header[3] {"Remark", "Warning", "Error"};

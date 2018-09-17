@@ -17,8 +17,9 @@
 
 #ifndef PYTHON_COMMON_HPP
 #define PYTHON_COMMON_HPP
-#include "Python.h"
-#include "frameobject.h"
+#include <Python.h>
+#include <frameobject.h>
+#include <string>
 
 class Python_API_Exception {};
 
@@ -74,6 +75,10 @@ T PyOnly(T t, U good_ret) {
     return t;
 }
 
+/// We don't expose full stack trace to Python side.
+/// Rather, we only tell if an error has occurred and only expose the deepest
+/// function. The rest of work is for C debugger. That's why this function
+/// doesn't return an RAII object as might expected.
 static void PyTraceback(const char* funcname, const char* filename, unsigned lineno) {
     PyObject* type, *value, *traceback;
     PyErr_Fetch(&type, &value, &traceback);
@@ -92,5 +97,12 @@ static void PyTraceback(const char* funcname, const char* filename, unsigned lin
     tb->tb_lineno = lineno;
     PyObject_GC_Track(tb);
     PyErr_Restore(type, value, tb_);
+}
+
+static std::string ascii_from_python(PyObject* pystr) {
+    if (!PyUnicode_CheckExact(pystr))
+        return nullptr;
+    PyScoped bytes(PyUnicode_AsASCIIString(pystr));
+    return PyBytes_AS_STRING(bytes.get());
 }
 #endif

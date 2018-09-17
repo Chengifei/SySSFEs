@@ -17,6 +17,29 @@
 #define EXPR_VISITOR_HPP
 #include <exprParser.h>
 #include <support/Expr.hpp>
+#include <support/variable.hpp>
 
-support::Expr visitExpression(exprParser::ExpressionContext* ctx);
+struct cmb_info {
+    std::size_t idx;
+    std::string mem_name;
+};
+
+struct mmb_info {
+    std::string name;
+    std::string mem_name;
+};
+
+struct expr_reader {
+    support::order_t max_order {};
+    std::size_t max_comb = 0;
+    support::Expr visitExpression(exprParser::ExpressionContext* ctx);
+    support::Expr visitUnit(exprParser::UnitContext* ctx);
+    support::Expr visitCombIdent(exprParser::CombIdentContext* ctx);
+    support::Expr visitMemIdent(exprParser::MemIdentContext* ctx);
+    support::Expr visitNumber(exprParser::NumberContext* ctx);
+    support::Expr visitFunctionExpression(exprParser::FunctionExpressionContext* ctx);
+    support::Expr visitPowExpression(exprParser::PowExpressionContext* ctx);
+    support::Expr visitMultiplicativeExpression(exprParser::MultiplicativeExpressionContext* ctx);
+};
+
 #endif

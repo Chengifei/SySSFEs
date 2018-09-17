@@ -17,10 +17,8 @@
 #define LLVM_COMPOSITE_DECL_HPP
 #include <vector>
 #include <string>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Constants.h>
-#include <llvm/IR/DerivedTypes.h>
 #include <algorithm>
+#include <support/type.hpp>
 
 struct composite_decl_base {
     std::vector<std::string> mem_names;
@@ -31,16 +29,20 @@ protected:
 
 class composite_decl : private composite_decl_base {
 public:
+    typedef std::size_t field_t;
     void add(std::string&& name, support::type tp) {
         mem_names.push_back(std::move(name));
         mem_types.push_back(tp);
     }
-    std::size_t get_mem_idx(const std::string& str) const {
+    field_t get_mem_idx(const std::string& str) const {
         // FIXME: Handle not found cases, this is unsafe.
         return std::find(mem_names.cbegin(), mem_names.cend(), str) - mem_names.cbegin();
     }
     const composite_decl_base& get() const {
         return *this;
+    }
+    std::size_t size() const {
+        return mem_names.size();
     }
 };
 #endif

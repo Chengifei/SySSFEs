@@ -21,10 +21,11 @@ struct type {
     enum : char {
         REAL,
         INT,
-        BUFFER
+        BUFFER,
+        OBJECT
     } base;
     bool is_const;
-    char align;
+    unsigned char align;
     unsigned agg;
 };
 

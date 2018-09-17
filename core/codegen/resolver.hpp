@@ -17,22 +17,23 @@
 
 #ifndef RULE_TYPES_HPP
 #define RULE_TYPES_HPP
-#include <support/variable.hpp>
 #include <cstddef>
 #include <vector>
+#include <array>
 #include <memory>
 #include <algorithm>
 #include <boost/container/flat_map.hpp>
 #include <iter_utils.hpp>
+#include <support/variable.hpp>
 
 namespace codegen {
 
-class variable {
-    bool need_update = true;
+struct var_status {
+    bool need_update;
 public:
     const bool initialized;
-    constexpr variable(bool need_update, bool initialized)
-        : need_update(need_update), initialized(initialized) {}
+    constexpr var_status(bool, bool initialized) // FIXME
+        : need_update(true), initialized(initialized) {}
     bool update() {
         if (!need_update)
             return false;
@@ -44,32 +45,44 @@ public:
     }
 };
 
-struct Rule : std::vector<support::variable_designation> {
+// ### CAUTION ### CAUTION ### CAUTION ### CAUTION ### CAUTION
+// Although resolver module uses the same var_designation struct
+// as with LLVM, its id field has absolutely different meanings.
+// For LLVM, id is assigned to every 'programmatical' variable,
+// while in codegen, it is assigned to each basic field of object
+// as well as independent controls and global variables which have
+// to have types of int or float.
+using support::var_designation, support::order_t, support::id_type;
+
+struct Rule : std::vector<var_designation> {
     bool enabled = true;
-    using std::vector<support::variable_designation>::vector;
+    using std::vector<var_designation>::vector;
 };
 
 struct step {
     std::unique_ptr<std::size_t[]> rule;
     std::size_t* rule_end;
-    std::unique_ptr<support::variable_designation[]> var;
+    std::unique_ptr<var_designation[]> var;
+    std::size_t size() const {
+        return rule_end - rule.get();
+    }
 };
 
 typedef std::vector<step> resolved_sequence;
 
 struct variable_pool {
-    typedef support::variable_designation key_type;
-    typedef variable mapped_type;
+    typedef var_designation key_type;
+    typedef var_status mapped_type;
 private:
     struct packed_vars {
-        std::vector<support::order_t> orders;
-        std::vector<variable> states;
-        variable& operator[](const support::order_t& o) {
+        std::vector<order_t> orders;
+        std::vector<var_status> states;
+        var_status& operator[](const order_t& o) {
             return *(states.begin() +
                 (std::find(orders.cbegin(), orders.cend(), o) - orders.cbegin()));
         }
         template <typename... T>
-        bool add(support::order_t o, T&&... args) {
+        bool add(order_t o, T&&... args) {
             auto it = std::find(orders.cbegin(), orders.cend(), o);
             if (it != orders.cend())
                 return false; // for debugging, assert the two values are the same
@@ -78,18 +91,22 @@ private:
             return true;
         }
     };
-    typedef boost::container::flat_map<support::base_t, packed_vars> pool_t;
+    typedef boost::container::flat_map<id_type, packed_vars> pool_t;
     pool_t pool;
 public:
-    variable& operator[](const support::variable_designation& v) {
+    var_status& operator[](const var_designation& v) {
         return pool[v.id][v.order];
     }
-    iter_utils::array_view<variable> at(support::base_t base) {
-        std::vector<variable>& all = pool.at(base).states;
-        return {&*all.begin(), &*all.end()};
+    std::pair<std::vector<var_status>::iterator, std::vector<var_status>::iterator>
+    at(id_type base) {
+        std::vector<var_status>& all = pool.at(base).states;
+        return std::make_pair(all.begin(), all.end());
+    }
+    std::size_t base_size() const {
+        return pool.size();
     }
     template <typename... T>
-    bool add(const support::variable_designation& v, T&&... args) {
+    bool add(const var_designation& v, T&&... args) {
         auto it = pool.find(v.id);
         if (it != pool.cend())
             return it->second.add(v.order, std::forward<T&&>(args)...);
@@ -97,7 +114,7 @@ public:
             return pool.emplace_hint(it, v.id, packed_vars{})->second.add(v.order, std::forward<T&&>(args)...);
     }
     struct iterator {
-        typedef variable value_type;
+        typedef var_status value_type;
         typedef value_type& reference;
         typedef value_type* pointer;
         typedef std::ptrdiff_t difference_type;
@@ -105,7 +122,7 @@ public:
     public: // FIXME
         pool_t::iterator major;
         const pool_t::iterator last_major;
-        std::vector<variable>::iterator minor;
+        std::vector<var_status>::iterator minor;
     public:
         reference operator*() noexcept {
             return *minor;
@@ -118,7 +135,7 @@ public:
             if (minor == major->second.states.end()) {
                 ++major;
                 minor = major != last_major ? major->second.states.begin()
-                                            : std::vector<variable>::iterator{};
+                                            : std::vector<var_status>::iterator{};
             }
             return *this;
         }
@@ -161,7 +178,7 @@ private:
     };
     /// The function may fail, and return false on fail.
     int alg_consistent(bool);
-    int broadcast(const support::base_t&) noexcept;
+    int broadcast(const id_type&) noexcept;
 };
 
 }

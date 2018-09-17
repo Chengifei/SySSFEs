@@ -1,6 +1,4 @@
 #include <sstream>
-
-#include "antlr4-runtime.h"
 #include "exprLexer.h"
 #include "exprVisitor.h"
 
@@ -13,8 +11,6 @@ support::Expr parse(std::string str) {
     exprParser parser(&tokens);
 
     exprParser::ExpressionContext *tree = parser.expression();
-    exprVisitor visitor;
-    visitor.visitExpression(tree);
-    support::Expr expr = std::move(visitor.expr);
+    support::Expr expr = visitExpression(tree);
     return expr;
 }

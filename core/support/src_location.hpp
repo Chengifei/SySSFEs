@@ -18,8 +18,8 @@
 namespace support {
 
 struct src_location {
-    unsigned lineno;
-    unsigned colno;
+    unsigned line;
+    unsigned col;
 };
 
 }

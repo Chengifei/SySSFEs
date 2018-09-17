@@ -12,22 +12,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#ifndef ARRAY_BUILDER_HPP
+#define ARRAY_BUILDER_HPP
+#include <vector>
 
-#ifndef LLVM_MANGLING_HPP
-#define LLVM_MANGLING_HPP
-#include <string>
-
-class mangler {
-    unsigned rule_counter = 0;
+template <typename T>
+class custom_allocator {
 public:
-    std::string rule(std::string&& name) {
-        return "_" + name + "_" + std::to_string(rule_counter++);
+    void* const ptr;
+    typedef T value_type;
+    T* allocate(std::size_t) {
+        return static_cast<T*>(ptr);
     }
-    static std::string iter_inc(std::string ctrl) {
-        return "_" + ctrl + "_inc";
+    void deallocate(T*, std::size_t) {}
+    void destroy(T*) {}
+    template <typename U>
+    operator custom_allocator<U>() {
+        return { ptr };
     }
-    static std::string iter_dec(std::string ctrl) {
-        return "_" + ctrl + "_dec";
-    }
+};
+
+template <typename T>
+class array_builder : public std::vector<T, custom_allocator<T>> {
+public:
+    array_builder(void* buffer) : std::vector<T, custom_allocator<T>>(custom_allocator<T>{buffer}) {}
 };
 #endif

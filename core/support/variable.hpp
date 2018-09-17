@@ -1,4 +1,4 @@
-/* Copyright 2018 by Yifei Zheng
+/* Copyright 2017-2018 by Yifei Zheng
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,21 +15,44 @@
 
 #ifndef VARIABLE_HPP
 #define VARIABLE_HPP
-#include <cstddef>
-#include <cstdint>
+#include "type.hpp"
+#include <string>
 #include <array>
+#include <unordered_map>
 
 namespace support {
 
-typedef std::size_t base_t;
-typedef std::array<std::uint8_t, 8> order_t;
+struct VariableBase {
+    std::string name;
+    type tp;
+};
 
-struct variable_designation {
-    base_t id;
+struct ctrl_variable : VariableBase {
+    void* start;
+    void* step;
+    void* end;
+};
+
+typedef std::array<std::uint8_t, 8> order_t;
+// FIXME: refactor 8 has to equal to VariablePool::ctrl_size
+
+struct var_w_init : VariableBase {
+private:
+    struct hash_arr {
+        std::size_t operator()(const order_t& arr) const {
+            return *reinterpret_cast<const std::size_t*>(arr.data());
+        }
+    };
+public:
+    typedef std::unordered_map<order_t, void*, hash_arr> init_collection;
+    init_collection inits;
+};
+
+typedef std::size_t id_type;
+
+struct var_designation {
+    id_type id;
     order_t order;
-    bool operator==(const variable_designation& rhs) const {
-        return id == rhs.id && order == rhs.order;
-    }
 };
 
 }

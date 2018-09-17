@@ -13,19 +13,23 @@
  * limitations under the License.
  */
 
-#include "initialization.hpp"
+#include <sstream>
+#include <exprParser.h>
+#include <exprLexer.h>
+#include "exprVisitor.hpp"
 
-static void* to_ptr(double d) {
-    union {
-        double f;
-        void* l;
-    } u;
-    u.f = d;
-    return u.l;
-}
+support::Expr parse(std::string str, std::size_t& comb, std::size_t& order) {
+    using namespace antlr4;
+    std::stringstream s(std::move(str));
+    ANTLRInputStream input(s);
+    exprLexer lexer(&input);
+    CommonTokenStream tokens(&lexer);
+    exprParser parser(&tokens);
 
-using namespace support;
-
-void VariablePool::add_ctrl(std::string&& name, double start, double step, double end) {
-    controls.push_back(ctrl_variable{ {std::move(name), type::REAL}, to_ptr(start), to_ptr(step), to_ptr(end) });
+    exprParser::ExpressionContext *tree = parser.expression();
+    expr_reader er;
+    auto ret = er.visitExpression(tree);
+    comb = er.max_comb;
+    order = er.max_order[0];
+    return ret;
 }

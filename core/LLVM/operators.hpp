@@ -19,21 +19,28 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/ADT/StringMap.h>
-#include <vector> 
-#include <support/Expr.hpp>
-#include "fcn_base.hpp"
-#include <codegen/resolver.hpp>
+#include <llvm/IR/BasicBlock.h>
+#include <vector>
+
+class fcn_builder;
+class arglist_builder;
 
 struct op_info {
-    llvm::Instruction* (*impl)(llvm::Function*, std::vector<llvm::Value*>&, const fcn_base&);
-    void (*visitor)(fcn_base&, support::Expr::Op&, const codegen::step&) = nullptr;
+    llvm::Value* (*impl)(std::vector<llvm::Value*>&, const fcn_builder&, llvm::BasicBlock*);
+    // NOTE: We used to have a visitor function that allows ops to interact
+    // with arglist_builder by themselves so that they can request any argument
+    // they'd like. But that was deemed as a overkill. For that to happen, we
+    // had also to use a postorder iteration to visit all nodes.
+    // Now all the requests are summed up below (well, only two). Both are
+    // currently used only by DIFF_OP.
+    // FIXME: These properties apply to each argument, rather than to the
+    // entire operator. But it can be difficult to mitigate this with those
+    // variadic operator, e.g. diff.
+    const bool wants_callable = false;
+    const bool iter_instead_of_val = false;
     static void init(llvm::LLVMContext& c, llvm::Module& m);
-    llvm::Instruction* call(llvm::Function* fcn, std::vector<llvm::Value*>& stack, const fcn_base& am) {
-        return impl(fcn, stack, am);
-    }
-    void visit(fcn_base& a, support::Expr::Op& o, const codegen::step& ctx) {
-        if (visitor)
-            visitor(a, o, ctx);
+    llvm::Value* call(std::vector<llvm::Value*>& stack, const fcn_builder& am, llvm::BasicBlock* bb) {
+        return impl(stack, am, bb);
     }
 };
 
