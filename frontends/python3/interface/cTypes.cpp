@@ -27,14 +27,14 @@ PyObject* cTypes_cmp(PyObject* self, PyObject* rhs, int op) {
     return Py_NotImplemented;
 }
 
-PyObject* cTypes_getattro(PyObject* self, PyObject* attr_name) {
-    if (PyObject* meth = _PyType_Lookup(&cTypesType, attr_name)) {
+PyObject* cTypes_getattr(PyObject* self, char* attr_name) {
+    if (PyObject* meth = _PyType_Lookup(&cTypesType, PyUnicode_FromString(attr_name))) {
         Py_INCREF(meth);
+        PyScoped _(meth);
         descrgetfunc f = meth->ob_type->tp_descr_get;
-        Py_DECREF(meth);
         return f(meth, self, reinterpret_cast<PyObject*>(&cTypesType));
     }
-    else if (PyUnicode_CompareWithASCIIString(attr_name, "base") == 0)
+    else if (strcmp(attr_name, "base") == 0)
         switch (static_cast<cTypes*>(self)->type.base) {
             case support::type::REAL:
                 return PyUnicode_FromString("double");
@@ -43,9 +43,9 @@ PyObject* cTypes_getattro(PyObject* self, PyObject* attr_name) {
             case support::type::BUFFER:
                 return PyUnicode_FromString("buf");
         }
-    else if (PyUnicode_CompareWithASCIIString(attr_name, "qual") == 0)
+    else if (strcmp(attr_name, "qual") == 0)
         return PyLong_FromLong(static_cast<cTypes*>(self)->type.is_const);
-    else if (PyUnicode_CompareWithASCIIString(attr_name, "agg") == 0)
+    else if (strcmp(attr_name, "agg") == 0)
         return PyLong_FromLong(static_cast<cTypes*>(self)->type.agg);
     PyErr_Format(PyExc_AttributeError,
                  "cTypes object has no attribute '%.400s'", attr_name);
@@ -85,7 +85,7 @@ int cTypes_init(PyObject* self, PyObject* args, PyObject*) {
     unsigned agg;
     if (!PyArg_ParseTuple(args, "III", &base, &is_const, &agg))
         return -1;
-    new(&(static_cast<cTypes*>(self)->type)) support::type{base, static_cast<bool>(is_const), -1, agg};
+    new(&(static_cast<cTypes*>(self)->type)) support::type{base, static_cast<bool>(is_const), 0, agg};
     return 0;
 }
 
@@ -117,19 +117,19 @@ PyObject* cTypes_to_C_type(PyObject* self, PyObject*) {
     return PyUnicode_FromString(tp);
 }
 
-PyMethodDef Methods[] {
-        {"get_C_type", cTypes_to_C_type, METH_NOARGS, nullptr},
-        {nullptr}
+static PyMethodDef Methods[] {
+    {"get_C_type", cTypes_to_C_type, METH_NOARGS, nullptr},
+    {nullptr}
 };
 
 PyTypeObject cTypesType {
         PyVarObject_HEAD_INIT(NULL, 0)
-        "support.cTypes", /* tp_name */
-        sizeof(cTypes),      /* tp_basicsize */
+        "llvm.cTypes",       /* tp_name */
+        sizeof(cTypes),            /* tp_basicsize */
         0,                         /* tp_itemsize */
         call_destructor<cTypes>, /* tp_dealloc */
         0,                         /* tp_print */
-        0,                         /* tp_getattr */
+        cTypes_getattr,            /* tp_getattr */
         0,                         /* tp_setattr */
         0,                         /* tp_reserved */
         cTypes_repr,               /* tp_repr */
@@ -139,7 +139,7 @@ PyTypeObject cTypesType {
         cTypes_hash,               /* tp_hash  */
         0,                         /* tp_call */
         0,                         /* tp_str */
-        cTypes_getattro,           /* tp_getattro */
+        0,                         /* tp_getattro */
         0,                         /* tp_setattro */
         0,                         /* tp_as_buffer */
         Py_TPFLAGS_DEFAULT,        /* tp_flags */
